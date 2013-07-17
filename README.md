@@ -11,6 +11,12 @@ Buildout deployment
     bin/coverage run --source=stoxy bin/test --with-xunit
 
 
+Building documentation
+======================
+    export PYTHONPATH=$PYTHONPATH:$PWD
+    bin/buildout -N install docs
+    bin/docs
+
 Development setup
 =================
 To install it:
