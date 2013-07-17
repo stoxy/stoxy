@@ -1,0 +1,14 @@
+nosetests.xml
+.coverage
+*.pyc
+*.swp
+RELEASE-VERSION
+*.egg-info
+bin
+.installed.cfg
+.settings
+develop-eggs
+eggs
+parts
+dist
+build
