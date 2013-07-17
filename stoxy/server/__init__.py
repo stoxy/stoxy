@@ -1,6 +1,6 @@
 from grokcore.component import implements, Subscription, context
 
-import stoxy.server
+import stoxy
 
 from opennode.oms.config import IRequiredConfigurationFiles, gen_config_file_names
 from opennode.oms.model.model import creatable_models
