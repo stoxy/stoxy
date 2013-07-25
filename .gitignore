@@ -13,3 +13,5 @@ parts
 dist
 build
 docs
+
+.mr.developer*

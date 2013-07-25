@@ -18,8 +18,7 @@ class IInDataContainer(Interface):
 
 
 class IDataContainer(Interface):
-    name = schema.TextLine(title=u"Container name",
-                               required=False)
+    name = schema.TextLine(title=u"Container name", required=False)
 
 
 class DataContainer(Container):
@@ -59,4 +58,3 @@ provideSubscriptionAdapter(ByNameContainerExtension, adapts=(RootDataContainers,
 
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(DataContainer, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(DataContainer, ))
-

@@ -25,8 +25,6 @@ class StoxyPlugin(PluginInfo):
         print "[StoxyPlugin] initializing plugin"
 
         stoxy_creatable_models = dict((cls.__name__.lower(), cls)
-                                        for cls in [DataObject, DataContainer])
+                                      for cls in [DataObject, DataContainer])
 
         creatable_models.update(stoxy_creatable_models)
-
-

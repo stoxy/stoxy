@@ -1,8 +1,7 @@
 from __future__ import absolute_import
 
-from grokcore.component import context, implements
+from grokcore.component import implements
 from zope import schema
-from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface
 
 from opennode.oms.model.model.base import IDisplayName
@@ -12,14 +11,9 @@ from stoxy.server.model.container import IInDataContainer
 
 
 class IDataObject(Interface):
-    name = schema.TextLine(title=u"Data object name",
-                               required=True)
-
-    mimetype = schema.TextLine(title=u"MIME type of the data",
-                               required=True)
-
-    value = schema.TextLine(title=u"A stub for the data object value",
-                               required=True)
+    name = schema.TextLine(title=u"Data object name", required=True)
+    mimetype = schema.TextLine(title=u"MIME type of the data", required=True)
+    value = schema.TextLine(title=u"Value URI", required=True)
 
 
 class DataObject(Model):
