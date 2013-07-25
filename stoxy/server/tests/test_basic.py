@@ -1,5 +1,7 @@
+import logging
 import unittest
 import os
+import requests
 import tempfile
 
 from mock import MagicMock
@@ -7,12 +9,27 @@ from mock import MagicMock
 import libcdmi
 
 
+log = logging.getLogger(__name__)
+_server_is_up = False
+
+
+def server_is_up():
+    global _server_is_up
+    return _server_is_up
+
+
 def setUpModule():
-    # run the server
-    pass
+    global _server_is_up
+    response = requests.get(TestBasic._endpoint)
+    if response.status_code >= 400:
+        _server_is_up = False
+        log.debug('Server is down!')
+    else:
+        _server_is_up = True
+        log.debug('Server is up!')
+
 
 def tearDownModule():
-    # shutdown the server
     pass
 
 
@@ -42,6 +59,7 @@ class TestBasic(unittest.TestCase):
         self.addToCleanup(setattr, container, object_name, old_value)
         return new_value
 
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_and_get_container(self):
         c = libcdmi.open(self._endpoint)
         container_create = c.create_container('/testcontainer')
