@@ -6,7 +6,11 @@ import tempfile
 
 from mock import MagicMock
 
-import libcdmi
+try:
+    import libcdmi
+except ImportError:
+    print ('To test, you need to enable libcdmi-python in development mode (see docs)')
+    libcdmi = MagicMock()
 
 
 log = logging.getLogger(__name__)
@@ -15,7 +19,7 @@ _server_is_up = False
 
 def server_is_up():
     global _server_is_up
-    return _server_is_up
+    return _server_is_up and type(libcdmi) is not MagicMock
 
 
 def setUpModule():
