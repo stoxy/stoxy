@@ -17,33 +17,35 @@ log = logging.getLogger(__name__)
 _server_is_up = False
 
 
+DEFAULT_ENDPOINT = 'http://localhost:8080/storage'
+
+
 def server_is_up():
-    global _server_is_up
-    return _server_is_up and type(libcdmi) is not MagicMock
-
-
-def setUpModule():
-    global _server_is_up
     try:
-        response = requests.get(TestBasic._endpoint)
+        response = requests.get(DEFAULT_ENDPOINT, auth=('admin', 'admin'))
     except requests.ConnectionError:
         _server_is_up = False
+        log.debug('Server is down: connection error!')
+        print 'Connection error!'
     else:
         _server_is_up = True
         if response.status_code >= 400:
             _server_is_up = False
-            log.debug('Server is down!')
+            log.debug('Server returned status code %s' % response.status_code)
+            print 'Server returned %s to a simple GET request' % response.status_code
         else:
-            _server_is_up = True
-            log.debug('Server is up!')
 
-
-def tearDownModule():
-    pass
+            if type(libcdmi) is MagicMock:
+                _server_is_up = False
+                print 'libcdmi is unavailable!'
+            else:
+                _server_is_up = True
+                print 'Server is up! libcdmi is good to go.'
+    return _server_is_up
 
 
 class TestBasic(unittest.TestCase):
-    _endpoint = 'http://localhost:8080/storage'
+    _endpoint = DEFAULT_ENDPOINT
     _mock_up_marker = object()
 
     def setUp(self):
