@@ -4,7 +4,6 @@ import logging
 from grokcore.component import Adapter
 from grokcore.component import implements
 from grokcore.component import context
-from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
@@ -70,7 +69,8 @@ class DataContainerView(ContainerView):
             log.error('Input data was not a dictionary:\n%s', data)
             raise BadRequest("Input data must be a dictionary")
 
-        if 'metadata' in data:
+        log.debug('Received data: %s', data)
+        if 'metadata' in data or u'metadata' in data:
             del data['metadata']
 
         # Assume that the name is the last element in the path
@@ -79,6 +79,7 @@ class DataContainerView(ContainerView):
         form = RawDataValidatingFactory(data, StorageContainer)
 
         if form.errors:
+            log.error(data)
             request.setResponseCode(BadRequest.status_code)
             return form.error_dict()
 
@@ -107,9 +108,9 @@ class DataContainerView(ContainerView):
             request.write(json.dumps({'errorMessage': str(f.value)}))
             request.finish()
 
-        d = defer.succeed(None)  # self.validate_hook(principal)
-        d.addCallback(handle_success, container, principal)
+        d = handle_success(None, container, principal)
         d.addErrback(handle_error, container, principal)
+
         return NOT_DONE_YET
 
     def _responseFailed(self, e, req):
