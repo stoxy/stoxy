@@ -20,8 +20,9 @@ class IInStorageContainer(Interface):
 
 
 class IStorageContainer(Interface):
-    oid = schema.TextLine(title=u"CDMI Object ID", max_length=40, min_length=24, required=True)
+    oid = schema.TextLine(title=u"CDMI Object ID", max_length=40, min_length=24, required=False)
     name = schema.TextLine(title=u"Container name", required=True)
+    metadata = schema.Dict(title=u'Metadata', required=False)
 
 
 class IRootContainer(Interface):
@@ -33,9 +34,10 @@ class StorageContainer(Container):
 
     __contains__ = IInStorageContainer
 
-    def __init__(self, oid=None, name=None):
+    def __init__(self, oid=None, name=None, metadata={}):
         self.oid = generate_guid_b16() if oid is None else oid
         self.__name__ = name
+        self.metadata = metadata
 
     @property
     def name(self):
@@ -50,17 +52,25 @@ class StorageContainer(Container):
 
 
 class RootStorageContainer(Container):
-    implements(IStorageContainer, IRootContainer)
+    implements(IStorageContainer, IDisplayName, IRootContainer)
     __contains__ = IInStorageContainer
     __name__ = 'storage'
 
     def __init__(self, *args, **kw):
         self.oid = generate_guid_b16()
+        self.metadata = {}
         super(RootStorageContainer, self).__init__(*args, **kw)
 
     @property
     def name(self):
         return self.__name__
+
+    def display_name(self):
+        return self.name
+
+    @property
+    def nicknames(self):
+        return [self.name]
 
     def __str__(self):
         return 'Root storage container'

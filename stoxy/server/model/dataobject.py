@@ -12,20 +12,22 @@ from stoxy.server.model.container import IInStorageContainer
 
 
 class IDataObject(Interface):
-    oid = schema.TextLine(title=u"CDMI Object ID", max_length=40, min_length=24, required=True)
+    oid = schema.TextLine(title=u"CDMI Object ID", max_length=40, min_length=24, required=False)
     name = schema.TextLine(title=u"Data object name", required=True)
     mimetype = schema.TextLine(title=u"MIME type of the data", required=True)
     value = schema.TextLine(title=u"Value URI", required=True)
+    metadata = schema.Dict(title=u'Metadata', required=False)
 
 
 class DataObject(Model):
     implements(IDataObject, IDisplayName, IInStorageContainer)
 
-    def __init__(self, oid=None, name=None, mimetype=None, value=None):
+    def __init__(self, oid=None, name=None, mimetype=None, value=None, metadata={}):
         self.oid = generate_guid_b16() if oid is None else oid
         self.__name__ = name
         self.mimetype = mimetype
         self.value = value
+        self.metadata = metadata
 
     @property
     def name(self):

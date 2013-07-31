@@ -8,19 +8,25 @@ from twisted.web.server import NOT_DONE_YET
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import queryAdapter
+from zope.security.interfaces import Unauthorized
+from zope.security.proxy import removeSecurityProxy
 
 from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.base import IHttpRestView
+from opennode.oms.endpoint.httprest.base import HttpRestView
 from opennode.oms.endpoint.httprest.base import IHttpRestSubViewFactory
 from opennode.oms.endpoint.httprest.root import BadRequest
-from opennode.oms.endpoint.httprest.view import ContainerView
-from opennode.oms.endpoint.httprest.view import DefaultView
+from opennode.oms.endpoint.httprest.root import NotFound
+from opennode.oms.endpoint.ssh.cmd.security import effective_perms
 from opennode.oms.log import UserLogger
+from opennode.oms.model.schema import model_to_dict
 from opennode.oms.model.traversal import parse_path
+from opennode.oms.security.checker import get_interaction
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
 from stoxy.server.model.container import IStorageContainer
+from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
@@ -29,16 +35,21 @@ from stoxy.server.model.dataobject import IDataObject
 log = logging.getLogger(__name__)
 
 
-class DataContainerView(ContainerView):
-    context(IStorageContainer)
+class CdmiView(HttpRestView):
+    context(object)
+
+    object_constructor = StorageContainer
+    object_type = 'application/cdmi-container'
 
     def render_object(self, container):
+        parent_oid = (container.__parent__.oid
+                      if not IRootContainer.providedBy(container) else None)
         return json.dumps({
-            'objectType': 'application/cdmi-container',
-            'objectID': container.__name__,
+            'objectType': self.object_type,
+            'objectID': container.oid,
             'objectName': container.name,
             'parentURI': container.__parent__.__name__,
-            'parentID': container.__parent__.__name__,
+            'parentID': parent_oid,
             'completionStatus': 'Complete',
             'metadata': {},
             'childrenrange': '0-%d' % len(container.listcontent()),
@@ -58,6 +69,12 @@ class DataContainerView(ContainerView):
 
         return principal
 
+    def render_get(self, request):
+        if not request.interaction.checkPermission('view', self.context):
+            raise NotFound
+
+        return self.render_object(self.context)
+
     def render_put(self, request):
         try:
             data = json.load(request.content)
@@ -69,17 +86,12 @@ class DataContainerView(ContainerView):
             log.error('Input data was not a dictionary:\n%s', data)
             raise BadRequest("Input data must be a dictionary")
 
-        log.debug('Received data: %s', data)
-        if 'metadata' in data or u'metadata' in data:
-            del data['metadata']
-
         # Assume that the name is the last element in the path
         data['name'] = parse_path(request.path)[-1]
 
         form = RawDataValidatingFactory(data, StorageContainer)
 
         if form.errors:
-            log.error(data)
             request.setResponseCode(BadRequest.status_code)
             return form.error_dict()
 
@@ -101,7 +113,7 @@ class DataContainerView(ContainerView):
 
         def handle_error(f, container, principal):
             f.trap(Exception)
-            self.add_log_event(principal, 'Creation of %s (%s) (via web) failed: %s: %s' %
+            self.add_log_event(principal, 'Creation of %s (%s) via CDMI failed: %s: %s' %
                                (container.name, container.__name__, type(f.value).__name__, f.value))
 
             request.setResponseCode(500)
@@ -123,6 +135,16 @@ class DataContainerView(ContainerView):
         log.debug('%s %s', principal.id, msg, *args, **kwargs)
 
 
+class DataContainerView(CdmiView):
+    context(IStorageContainer)
+
+
+class DataObjectView(CdmiView):
+    context(IDataObject)
+    object_constructor = DataObject
+    object_type = 'application/cdmi-object'
+
+
 class StoxyViewFactory(Adapter):
     implements(IHttpRestSubViewFactory)
     context(IStorageContainer)
@@ -137,39 +159,3 @@ class StoxyViewFactory(Adapter):
             return
 
         return queryAdapter(self.context, IHttpRestView)
-
-
-class DataObjectView(DefaultView):
-    context(IDataObject)
-
-    def render_object(self, o):
-        return json.dumps({
-            'objectType': 'application/cdmi-object',
-            'objectID': o.__name__,
-            'objectName': o.name,
-            'parentURI': o.__parent__.__name__,
-            'parentID': o.__parent__.__name__,
-            'completionStatus': 'Complete',
-            'metadata': {},
-        }, cls=JsonSetEncoder)
-
-    def render_put(self, request):
-        try:
-            data = json.load(request.content)
-        except ValueError:
-            raise BadRequest("Input data could not be parsed")
-
-        if not isinstance(data, dict):
-            raise BadRequest("Input data must be a dictionary")
-
-        if 'metadata' in data:
-            del data['metadata']
-
-        form = RawDataValidatingFactory(data, DataObject)
-
-        if not form.errors:
-            form.create()
-            return [IHttpRestView(self.context).render_recursive(request, depth=0)]
-        else:
-            request.setResponseCode(BadRequest.status_code)
-            return form.error_dict()
