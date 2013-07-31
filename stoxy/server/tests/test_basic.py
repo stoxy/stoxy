@@ -26,21 +26,16 @@ def server_is_up():
     except requests.ConnectionError:
         _server_is_up = False
         log.debug('Server is down: connection error!')
-        print 'Connection error!'
     else:
-        _server_is_up = True
         if response.status_code >= 400:
             _server_is_up = False
             log.debug('Server returned status code %s' % response.status_code)
-            print 'Server returned %s to a simple GET request' % response.status_code
+        elif type(libcdmi) is MagicMock:
+            _server_is_up = False
+            log.debug('libcdmi-python is unavailable -- server is "down"')
         else:
-
-            if type(libcdmi) is MagicMock:
-                _server_is_up = False
-                print 'libcdmi is unavailable!'
-            else:
-                _server_is_up = True
-                print 'Server is up! libcdmi is good to go.'
+            _server_is_up = True
+            log.debug('Server is up!')
     return _server_is_up
 
 
@@ -72,7 +67,7 @@ class TestBasic(unittest.TestCase):
 
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_and_get_container(self):
-        c = libcdmi.open(self._endpoint)
+        c = libcdmi.open(self._endpoint, credentials=('admin', 'admin'))
         container_create = c.create_container('/testcontainer')
         container_get = c.get('/testcontainer/', accept=libcdmi.common.CDMI_CONTAINER)
         self.assertEqual(container_create, container_get)
