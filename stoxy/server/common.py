@@ -18,6 +18,10 @@ from base64 import b64encode, b16encode
 from uuid import uuid4
 
 
+BASE16_SIZE_MULTIPLIER = 2
+OBJECTID_MAX_BYTES = 40
+
+
 def generate_guid(entnumber=0x00FFFFFF):
     """
     Implementation of the CDMI GUID specification from CDMI spec v1.0.1 5.11 "Object ID Format"

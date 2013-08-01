@@ -7,23 +7,26 @@ from zope.interface import Interface
 from opennode.oms.model.model.base import IDisplayName
 from opennode.oms.model.model.base import Model
 
-from stoxy.server.common import generate_guid_b16
+from stoxy.server import common
 from stoxy.server.model.container import IInStorageContainer
 
 
 class IDataObject(Interface):
-    oid = schema.TextLine(title=u"CDMI Object ID", max_length=40, min_length=24, required=False)
+    oid = schema.TextLine(title=u"CDMI Object ID",
+                          max_length=common.OBJECTID_MAX_BYTES * common.BASE16_SIZE_MULTIPLIER,
+                          min_length=24 * common.BASE16_SIZE_MULTIPLIER, required=False)
     name = schema.TextLine(title=u"Data object name", required=True)
     mimetype = schema.TextLine(title=u"MIME type of the data", required=True)
     value = schema.TextLine(title=u"Value URI", required=True)
-    metadata = schema.Dict(title=u'Metadata', required=False)
+    metadata = schema.Dict(title=u'Metadata', key_type=schema.TextLine(), value_type=schema.TextLine(),
+                           required=False)
 
 
 class DataObject(Model):
     implements(IDataObject, IDisplayName, IInStorageContainer)
 
     def __init__(self, oid=None, name=None, mimetype=None, value=None, metadata={}):
-        self.oid = generate_guid_b16() if oid is None else oid
+        self.oid = unicode(common.generate_guid_b16() if oid is None else oid)
         self.__name__ = name
         self.mimetype = mimetype
         self.value = value
@@ -39,3 +42,6 @@ class DataObject(Model):
     @property
     def nicknames(self):
         return [self.name, self.mimetype]
+
+    def __str__(self):
+        return '<DataObject ObjectID=%s name=%s>' % (self.oid, self.name)

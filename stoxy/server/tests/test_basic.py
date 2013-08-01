@@ -66,8 +66,47 @@ class TestBasic(unittest.TestCase):
         return new_value
 
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
-    def test_create_and_get_container(self):
+    def test_update(self):
         c = libcdmi.open(self._endpoint, credentials=('admin', 'admin'))
-        container_create = c.create_container('/testcontainer')
+
+        def cleanup_container(c, name):
+            try:
+                c.delete(name)
+            except Exception:
+                pass
+
+        self.addToCleanup(cleanup_container, c, '/testcontainer')
+        container_create_1 = c.create_container('/testcontainer')
+        container_create_2 = c.create_container('/testcontainer', metadata={'owner': 'nobody'})
         container_get = c.get('/testcontainer/', accept=libcdmi.common.CDMI_CONTAINER)
-        self.assertEqual(container_create, container_get)
+        self.assertEqual(dict, type(container_create_2))
+        self.assertEqual(dict, type(container_create_1))
+        self.assertEqual(dict, type(container_get))
+        NotThere = '<NotThere>'
+        for key, value in container_create_2.iteritems():
+            self.assertEqual(value, container_get.get(key, NotThere),
+                             'Expected: %s, but received: %s in %s' %
+                             (value, container_get.get(key, NotThere), key))
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_create_new_and_get_container(self):
+        c = libcdmi.open(self._endpoint, credentials=('admin', 'admin'))
+
+        def cleanup_objects(c, name):
+            try:
+                c.delete(name)
+            except Exception:
+                pass
+
+        self.addToCleanup(cleanup_objects, c, '/testcontainer')
+
+        cleanup_objects(c, '/testcontainer')
+        container_create = c.create_container('/testcontainer', metadata={'test': 'blah'})
+        container_get = c.get('/testcontainer/', accept=libcdmi.common.CDMI_CONTAINER)
+        self.assertEqual(dict, type(container_create))
+        self.assertEqual(dict, type(container_get))
+        NotThere = '<NotThere>'
+        for key, value in container_create.iteritems():
+            self.assertEqual(value, container_get.get(key, NotThere),
+                             'Expected: %s, but received: %s in %s' %
+                             (value, container_get.get(key, NotThere), key))
