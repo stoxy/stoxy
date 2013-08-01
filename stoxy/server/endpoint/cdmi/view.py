@@ -155,6 +155,8 @@ class CdmiView(HttpRestView):
 
         principal = self.get_principal(request)
         d = handle_success(None, request, result_object, principal)
+        connection_lost = request.notifyFinish()
+        connection_lost.addCallback(lambda r: d.cancel())
         d.addCallback(finish_response, request, result_object)
         d.addErrback(handle_error, request, result_object, principal)
 
