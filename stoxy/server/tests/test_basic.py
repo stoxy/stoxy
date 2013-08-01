@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import unittest
@@ -131,10 +132,49 @@ class TestBasic(unittest.TestCase):
                                 auth=self._credentials,
                                 headers=headers)
 
-        self.assertEqual(200, response.status_code)
+        self.assertEqual(200, response.status_code, response.text)
         self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-container')
 
         result_data = response.json()
         self.assertEqual('application/cdmi-container', result_data['objectType'])
         self.assertEqual('testcontainer', result_data['objectName'])
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_create_object_detailed(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+
+        data = {'metadata': {},
+                'mimetype': 'text/plain'}
+
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': libcdmi.common.CDMI_OBJECT})
+
+        with open(self._filename, 'rb') as input_file:
+            try:
+                content = input_file.read()
+                unicode(content, 'utf-8')
+                data['valuetransferencoding'] = 'utf-8'
+            except UnicodeDecodeError:
+                input_file.seek(0)
+                content = base64.b64encode(input_file.read())
+                data['valuetransferencoding'] = 'base64'
+
+        data.update({'value': content})
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                json.dumps(data),
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
+
+        result_data = response.json()
+        self.assertEqual('application/cdmi-container', result_data['objectType'])
+        self.assertEqual('testcontainer', result_data['objectName'])
+        self.assertEqual(content, result_data['value'])

@@ -57,6 +57,10 @@ class StorageContainer(Container):
     def __str__(self):
         return '<StorageContainer ObjectID=%s name=%s>' % (self.oid, self.name)
 
+    @property
+    def type(self):
+        return StorageContainer
+
 
 class RootStorageContainer(Container):
     implements(IStorageContainer, IDisplayName, IRootContainer)
@@ -82,6 +86,9 @@ class RootStorageContainer(Container):
     def __str__(self):
         return '<RootStorageContainer ObjectID=%s name=%s>' % (self.oid, self.name)
 
+    @property
+    def type(self):
+        return RootStorageContainer
 
 class DataObjectsRootInjector(ContainerInjector):
     context(OmsRoot)

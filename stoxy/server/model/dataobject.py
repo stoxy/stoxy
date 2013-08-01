@@ -46,3 +46,7 @@ class DataObject(Model):
 
     def __str__(self):
         return '<DataObject ObjectID=%s name=%s>' % (self.oid, self.name)
+
+    @property
+    def type(self):
+        return DataObject
