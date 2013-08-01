@@ -118,11 +118,6 @@ class CdmiView(HttpRestView):
 
         @db.transact
         def handle_success(r, request, obj, principal):
-            if request.finished:
-                log.error('Connection lost: cannot render resulting object. Modifications were saved. %s',
-                          request)
-                return
-
             if not existing_object:
                 obj.__owner__ = principal
                 self.context.add(obj)
@@ -133,6 +128,10 @@ class CdmiView(HttpRestView):
                                    (obj.name, obj.__name__))
 
         def finish_response(r, request, obj):
+            if request.finished:
+                log.error('Connection lost: cannot render resulting object. Modifications were saved. %s',
+                          request)
+                return
             request.write(self.render_object(obj))
             request.finish()
 
