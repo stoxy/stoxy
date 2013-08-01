@@ -14,7 +14,8 @@ from stoxy.server.model.container import IInStorageContainer
 class IDataObject(Interface):
     oid = schema.TextLine(title=u"CDMI Object ID",
                           max_length=common.OBJECTID_MAX_BYTES * common.BASE16_SIZE_MULTIPLIER,
-                          min_length=24 * common.BASE16_SIZE_MULTIPLIER, required=False)
+                          min_length=common.OBJECTID_MIN_BYTES * common.BASE16_SIZE_MULTIPLIER,
+                          required=False)
     name = schema.TextLine(title=u"Data object name", required=True)
     mimetype = schema.TextLine(title=u"MIME type of the data", required=True)
     value = schema.TextLine(title=u"Value URI", required=True)

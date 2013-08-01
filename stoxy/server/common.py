@@ -18,8 +18,11 @@ from base64 import b64encode, b16encode
 from uuid import uuid4
 
 
+CDMI_VERSION = '1.0.2'
+
 BASE16_SIZE_MULTIPLIER = 2
 OBJECTID_MAX_BYTES = 40
+OBJECTID_MIN_BYTES = 24
 
 
 def generate_guid(entnumber=0x00FFFFFF):

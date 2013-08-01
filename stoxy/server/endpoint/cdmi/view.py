@@ -1,5 +1,6 @@
 import json
 import logging
+import functools
 
 from grokcore.component import Adapter
 from grokcore.component import implements
@@ -26,9 +27,18 @@ from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
+from stoxy.server import common
 
 
 log = logging.getLogger(__name__)
+
+
+def response_headers(f):
+    @functools.wraps(f)
+    def _wrapper_for_render_method(self, request, *args, **kw):
+        CdmiView.set_response_headers(request)
+        return f(self, request, *args, **kw)
+    return _wrapper_for_render_method
 
 
 class CdmiView(HttpRestView):
@@ -37,12 +47,17 @@ class CdmiView(HttpRestView):
     object_constructor = StorageContainer
     object_type = 'application/cdmi-container'
 
+    @classmethod
+    def set_response_headers(cls, request):
+        request.setHeader('Content-Type', cls.object_type)
+        request.setHeader('X-CDMI-Specification-Version', common.CDMI_VERSION)
+
     def render_object(self, obj):
         return json.dumps(self.object_to_dict(obj), cls=JsonSetEncoder)
 
     def object_to_dict(self, obj):
-        parent_oid = (obj.__parent__.oid
-                      if not IRootContainer.providedBy(obj) else None)
+        parent_oid = (obj.__parent__.oid if not IRootContainer.providedBy(obj) else None)
+
         return {'objectType': self.object_type,
                 'objectID': obj.oid,
                 'objectName': obj.name,
@@ -66,13 +81,14 @@ class CdmiView(HttpRestView):
 
         return principal
 
+    @response_headers
     def render_get(self, request):
         if not request.interaction.checkPermission('view', self.context):
             raise NotFound
 
-        log.debug('Returning %s for %s' % (self.context, request))
         return self.object_to_dict(self.context)
 
+    @response_headers
     def render_put(self, request):
         try:
             data = json.load(request.content)
@@ -84,21 +100,14 @@ class CdmiView(HttpRestView):
             log.error('Input data was not a dictionary:\n%s', data)
             raise BadRequest("Input data must be a dictionary")
 
-        # Assume that the name is the last element in the path
-        data[u'name'] = unicode(parse_path(request.path)[-1])
-
-        if hasattr(request, 'unresolved_path'):
-            existing_object = self.context[request.unresolved_path[-1]]
-        else:
-            existing_object = self.context
-
-        log.debug('existing object under %s: %s', self.context, existing_object)
+        existing_object = self.context if not hasattr(request, 'unresolved_path') else None
 
         if existing_object:
             form = RawDataApplier(data, existing_object)
             action = 'apply'
         else:
-            form = RawDataValidatingFactory(data, StorageContainer)
+            data[u'name'] = unicode(request.unresolved_path[-1])
+            form = RawDataValidatingFactory(data, self.object_constructor)
             action = 'create'
 
         if form.errors:
@@ -108,7 +117,12 @@ class CdmiView(HttpRestView):
         result_object = getattr(form, action)()
 
         @db.transact
-        def handle_success(r, obj, principal):
+        def handle_success(r, request, obj, principal):
+            if request.finished:
+                log.error('Connection lost: cannot render resulting object. Modifications were saved. %s',
+                          request)
+                return
+
             if not existing_object:
                 obj.__owner__ = principal
                 self.context.add(obj)
@@ -118,12 +132,20 @@ class CdmiView(HttpRestView):
                 self.add_log_event(principal, 'Update of %s (%s) via CDMI was successful' %
                                    (obj.name, obj.__name__))
 
+        def finish_response(r, request, obj):
             request.write(self.render_object(obj))
-            log.debug('Returning %s for %s' % (obj, request))
             request.finish()
 
-        def handle_error(f, obj, principal):
+        def handle_error(f, request, obj, principal):
             f.trap(Exception)
+            if request.finished:
+                try:
+                    f.raiseException()
+                except Exception:
+                    log.error('Connection lost: cannot return error message to the client. %s', request,
+                              exc_info=True)
+                return
+
             self.add_log_event(principal, '%s of %s (%s) via CDMI failed: %s: %s' %
                                ('Creation' if not existing_object else 'Update',
                                 obj.name, obj.__name__, type(f.value).__name__, f.value))
@@ -133,11 +155,13 @@ class CdmiView(HttpRestView):
             request.finish()
 
         principal = self.get_principal(request)
-        d = handle_success(None, result_object, principal)
-        d.addErrback(handle_error, result_object, principal)
+        d = handle_success(None, request, result_object, principal)
+        d.addCallback(finish_response, request, result_object)
+        d.addErrback(handle_error, request, result_object, principal)
 
         return NOT_DONE_YET
 
+    @response_headers
     def render_delete(self, request):
         name = unicode(parse_path(request.path)[-1])
         existing_object = self.context[name]
@@ -145,9 +169,6 @@ class CdmiView(HttpRestView):
             del self.context[name]
         else:
             raise NotFound
-
-    def _responseFailed(self, e, req):
-        req.finish()
 
     def add_log_event(self, principal, msg, *args, **kwargs):
         owner = self.context.__owner__
@@ -171,8 +192,6 @@ class StoxyViewFactory(Adapter):
     context(IStorageContainer)
 
     def resolve(self, path, request):
-        log.debug('CDMI resolving path: %s for %s', path, request)
-
         if request.method.lower() == 'get' and len(path) > 0:
             return
 

@@ -22,7 +22,7 @@ class IInStorageContainer(Interface):
 class IStorageContainer(Interface):
     oid = schema.TextLine(title=u"CDMI Object ID",
                           max_length=common.OBJECTID_MAX_BYTES * common.BASE16_SIZE_MULTIPLIER,
-                          min_length=24 * common.BASE16_SIZE_MULTIPLIER,
+                          min_length=common.OBJECTID_MIN_BYTES * common.BASE16_SIZE_MULTIPLIER,
                           required=False)
     name = schema.TextLine(title=u"Container name", required=True)
     metadata = schema.Dict(title=u'Metadata', key_type=schema.TextLine(),
@@ -56,6 +56,7 @@ class StorageContainer(Container):
 
     def __str__(self):
         return '<StorageContainer ObjectID=%s name=%s>' % (self.oid, self.name)
+
 
 class RootStorageContainer(Container):
     implements(IStorageContainer, IDisplayName, IRootContainer)
