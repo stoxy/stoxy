@@ -21,6 +21,7 @@ from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
 from stoxy.server.model.container import IStorageContainer
+from stoxy.server.model.container import IInStorageContainer
 from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
@@ -42,7 +43,8 @@ def response_headers(f):
 
 
 class CdmiView(HttpRestView):
-    context(object)
+
+    context(IInStorageContainer)
 
     object_constructor_map = {'application/cdmi-container': StorageContainer,
                               'application/cdmi-object': DataObject}
