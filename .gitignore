@@ -13,6 +13,12 @@ parts
 dist
 build
 docs
-
+oms_groups
+oms_passwd
 .mr.developer*
 .ropeproject
+omsd.log
+twistd.pid
+db/
+.project
+.pydevproject
