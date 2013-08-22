@@ -11,7 +11,8 @@ setup(
     packages=find_packages(),
     namespace_packages=['stoxy'],
     zip_safe=False,  # martian grok scan is incompatible with zipped eggs
-    entry_points={'oms.plugins': ['stoxy = stoxy.server:StoxyPlugin']},
+    entry_points={'oms.plugins': ['stoxy = stoxy.server:StoxyPlugin'],
+                  'console_scripts': ['stoxy = opennode.oms.daemon:run']},
     install_requires=[
         "setuptools",  # Redundant but removes a warning
         "opennode.oms.core"
