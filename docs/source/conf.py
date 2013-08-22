@@ -12,8 +12,6 @@
 # serve to show the default.
 
 import sys, os
-import stoxy
-from version import get_git_version
 
 import sphinx.apidoc
 import shutil
@@ -23,8 +21,11 @@ sphinx.apidoc.main('sphinx-api -o gen ../../stoxy'.split())
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+print os.path.abspath('../../')
+sys.path.insert(0, os.path.abspath('../../'))
 
+import stoxy
+from version import get_git_version
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -48,7 +49,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Stoxy Server'
-copyright = u'2013, Ilja Livenson'
+copyright = u'2013, Stoxy developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -221,7 +222,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'oms', u'Stoxy Documentation',
-     [u'Stoxy authors'], 1)
+     [u'Stoxy developers'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -235,7 +236,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'Stoxy', u'Stoxy Documentation',
-   u'Stoxy authors', 'Stoxy', 'One line description of project.',
+   u'Stoxy developers', 'Stoxy', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -253,9 +254,9 @@ texinfo_documents = [
 
 # Bibliographic Dublin Core info.
 epub_title = u'Stoxy'
-epub_author = u'Stoxy authors'
-epub_publisher = u'Stoxy authors'
-epub_copyright = u'2013, Stoxy authors'
+epub_author = u'Stoxy developers'
+epub_publisher = u'Stoxy developers'
+epub_copyright = u'2013, Stoxy developers'
 
 # The language of the text. It defaults to the language option
 # or en if the language is not set.
