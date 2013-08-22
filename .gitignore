@@ -19,6 +19,5 @@ oms_passwd
 .ropeproject
 omsd.log
 twistd.pid
-db/
 .project
 .pydevproject
