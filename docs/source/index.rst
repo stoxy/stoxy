@@ -9,7 +9,7 @@ Stoxy supports CRUD operations for data objects and containers.
 
 Source code
 -----------
-Source code is available at `https://github.com/stoxy <https://github.com/stoxy>`_.
+Source code is available at `https://github.com/stoxy/stoxy <https://github.com/stoxy/stoxy>`_.
 
 License
 -------
