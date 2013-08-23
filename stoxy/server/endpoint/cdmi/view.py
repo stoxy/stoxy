@@ -8,6 +8,7 @@ from grokcore.component import context
 from twisted.web.server import NOT_DONE_YET
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.component import getAdapter
 from zope.component import queryAdapter
 
 from opennode.oms.endpoint.httprest.base import IHttpRestView
@@ -27,6 +28,7 @@ from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
+from stoxy.server.model.store import IDataStoreFactory
 from stoxy.server.model.form import CdmiObjectValidatorFactory
 from stoxy.server import common
 
@@ -72,11 +74,17 @@ class CdmiView(HttpRestView):
                 'parentURI': obj.__parent__.__name__,
                 'parentID': parent_oid,
                 'completionStatus': 'Complete',
-                'metadata': dict(obj.metadata),
-                'childrenrange': '0-%d' % len(obj.listcontent()),
-                'children': [child.name if IDataObject.providedBy(child)
-                             else child.__name__
-                             for child in obj.listcontent()]}
+                'metadata': dict(obj.metadata),}
+
+        if IStorageContainer.providedBy(obj):
+            data.update({'children': [(child.name if IDataObject.providedBy(child)
+                                      else child.__name__) for child in obj.listcontent()],
+                         'childrenrange': '0-%d' % len(obj.listcontent())})
+        elif IDataObject.providedBy(obj):
+            storemgr = getAdapter(obj, IDataStoreFactory).create()
+            value = storemgr.load()
+            data.update({'value': value,
+                         'valuetransferencoding': 'utf-8'})
 
         data.update(self.get_additional_data(obj))
         return data
@@ -86,11 +94,9 @@ class CdmiView(HttpRestView):
 
         if not interaction:
             auth = getUtility(IAuthentication, context=None)
-            principal = auth.getPrincipal(None)
+            return auth.getPrincipal(None)
         else:
-            principal = interaction.participations[0].principal
-
-        return principal
+            return interaction.participations[0].principal
 
     @response_headers
     def render_get(self, request):
@@ -127,16 +133,22 @@ class CdmiView(HttpRestView):
         if requested_type not in self.object_constructor_map.keys():
             raise BadRequest('Don\'t know how to create objects of type: %s' % requested_type)
 
+        if 'value' in data:
+            value = data['value']
+            data['value'] = None
+        else:
+            value = ''
+
         if existing_object:
-            data[u'name'] = unicode(parse_path(request.path)[-1])
+            data['name'] = unicode(parse_path(request.path)[-1])
             form = CdmiObjectValidatorFactory.get_applier(existing_object, data)
             request.setHeader('content-type', self.object_type_map[existing_object.type])
             action = 'apply'
         else:
+            data['name'] = unicode(request.unresolved_path)
             requested_class = self.object_constructor_map[requested_type]
-            data[u'name'] = unicode(request.unresolved_path[-1])
-            request.setHeader('content-type', requested_type)
             form = CdmiObjectValidatorFactory.get_creator(requested_class, data)
+            request.setHeader('content-type', requested_type)
             action = 'create'
 
         if form.errors:
@@ -151,6 +163,10 @@ class CdmiView(HttpRestView):
             if not existing_object:
                 obj.__owner__ = principal
                 self.context.add(obj)
+
+            if IDataObject.providedBy(result_object):
+                storemgr = getAdapter(result_object, IDataStoreFactory).create()
+                storemgr.save(value)
 
             self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
                                ('Creation' if not existing_object else 'Update', obj.name, obj.__name__))
@@ -177,6 +193,11 @@ class CdmiView(HttpRestView):
                                ('Creation' if not existing_object else 'Update',
                                 obj.name, obj.__name__, type(f.value).__name__, f.value))
 
+            try:
+                f.raiseException()
+            except Exception:
+                log.debug('Error debugging info', exc_info=True)
+
             request.setResponseCode(500)
             request.write(json.dumps({'errorMessage': str(f.value)}))
             request.finish()
@@ -193,9 +214,10 @@ class CdmiView(HttpRestView):
     @response_headers
     def render_delete(self, request):
         name = unicode(parse_path(request.path)[-1])
-        existing_object = self.context[name]
+        existing_object = self.context.__parent__[name]
         if existing_object:
-            del self.context[name]
+            log.debug('Deleting %s', self.context)
+            del self.context.__parent__[name]
         else:
             raise NotFound
 
