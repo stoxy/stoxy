@@ -81,8 +81,7 @@ class CdmiView(HttpRestView):
                                       else child.__name__) for child in obj.listcontent()],
                          'childrenrange': '0-%d' % len(obj.listcontent())})
         elif IDataObject.providedBy(obj) and data['completionStatus'] == 'Complete':
-            storemgr = getAdapter(obj, IDataStoreFactory).create()
-            value = storemgr.load()
+            value = self.load_object(obj)
             data.update({'value': value,
                          'valuetransferencoding': 'utf-8'})
 
@@ -103,7 +102,28 @@ class CdmiView(HttpRestView):
         if not request.interaction.checkPermission('view', self.context):
             raise NotFound
 
-        return self.object_to_dict(self.context)
+        cdmi = request.getHeader('X-CDMI-Specification-Version')
+
+        if cdmi or not IDataObject.providedBy(self.context):
+            request.setHeader('Content-Type', self.context.object_type)
+            return self.object_to_dict(self.context)
+        else:
+            return self.handle_noncdmi_get(request)
+
+    def handle_noncdmi_get(self, request):
+        request.setHeader('Content-Type', self.context.mimetype.encode('ascii'))
+        byterange = request.getHeader('Range')
+        if byterange is not None:
+            byterange = byterange.split('-')
+            begin = int(byterange[0])
+            end = int(byterange[1])
+            value = self.load_object(self.context)[begin:end]
+        else:
+            value = self.load_object(self.context)
+
+        request.write(value)
+        request.finish()
+        return NOT_DONE_YET
 
     def _parse_and_validate_data(self, request):
         try:
@@ -166,8 +186,10 @@ class CdmiView(HttpRestView):
             log.error('Connection lost: cannot render resulting object. '
                       'Modifications were saved. %s', request)
             return
+
         if not noncdmi:
             request.write(self.render_object(obj))
+
         request.finish()
 
     @response_headers

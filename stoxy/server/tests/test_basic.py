@@ -204,5 +204,35 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
-        result_data = response.text # Response body is not required
+        result_data = response.text  # Response body is not required
         self.assertTrue(len(result_data) == 0)
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_get_object_non_cdmi_detailed(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/octet-stream'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+
+        # TODO: test non-CDMI request optional Range header functionality
+        noncdmi_headers = {'Range': '10-15'}
+        response = requests.get(self._endpoint + '/testcontainer/testobject',
+                                auth=self._credentials,
+                                headers=noncdmi_headers)
+
+        self.assertEqual(len(response.text), 5)
+        self.assertEqual(response.text, content[10:15])
+        self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
