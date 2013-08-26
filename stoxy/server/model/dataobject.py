@@ -18,7 +18,7 @@ class IDataObject(Interface):
                           required=False)
     name = schema.TextLine(title=u"Data object name", required=True)
     mimetype = schema.TextLine(title=u"MIME type of the data", required=True)
-    value = schema.TextLine(title=u"Value URI", required=False)
+    value = schema.TextLine(title=u"Value URI", required=False, default=None)
     metadata = schema.Dict(title=u'Metadata', key_type=schema.TextLine(), value_type=schema.TextLine(),
                            required=False)
 

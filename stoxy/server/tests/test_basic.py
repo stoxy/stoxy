@@ -54,7 +54,7 @@ class TestBasic(unittest.TestCase):
         self._cleanup = []
         fh, self._filename = tempfile.mkstemp(prefix='libcdmi-test-')
         with open(self._filename, 'w') as f:
-            f.write('\x12\0\0dlasdkasdlkasdlaskdlas\32\1\3\0\0\0\0')
+            f.write('\xff\x12\0\0dlasdkasdlkasdlaskdlas\x91\x01\x03\0\0\0\0')
         os.close(fh)  # allow opening by the library
 
     def tearDown(self):
@@ -179,5 +179,30 @@ class TestBasic(unittest.TestCase):
         result_data = response.json()
         self.assertEqual('application/cdmi-object', result_data['objectType'])
         self.assertEqual('testobject', result_data['objectName'])
-        self.assertTrue(len(content) > 0)
+        self.assertTrue(len(result_data['value']) > 0)
         self.assertEqual(content, result_data['value'])
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_create_object_non_cdmi_detailed(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/binary'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
+
+        result_data = response.text # Response body is not required
+        self.assertTrue(len(result_data) == 0)

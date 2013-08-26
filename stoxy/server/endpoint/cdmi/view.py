@@ -73,14 +73,14 @@ class CdmiView(HttpRestView):
                 'objectName': obj.name,
                 'parentURI': obj.__parent__.__name__,
                 'parentID': parent_oid,
-                'completionStatus': 'Complete',
+                'completionStatus': 'Complete',  # TODO: report errors / incomplete status
                 'metadata': dict(obj.metadata),}
 
         if IStorageContainer.providedBy(obj):
             data.update({'children': [(child.name if IDataObject.providedBy(child)
                                       else child.__name__) for child in obj.listcontent()],
                          'childrenrange': '0-%d' % len(obj.listcontent())})
-        elif IDataObject.providedBy(obj):
+        elif IDataObject.providedBy(obj) and data['completionStatus'] == 'Complete':
             storemgr = getAdapter(obj, IDataStoreFactory).create()
             value = storemgr.load()
             data.update({'value': value,
@@ -118,10 +118,60 @@ class CdmiView(HttpRestView):
 
         return data
 
+    def store_object(self, obj, data):
+        storemgr = getAdapter(obj, IDataStoreFactory).create()
+        storemgr.save(data)
+
+    def load_object(self, obj):
+        storemgr = getAdapter(obj, IDataStoreFactory).create()
+        return storemgr.load()
+
+    @db.transact
+    def handle_success(self, r, request, obj, principal, update, value):
+        if not update:
+            obj.__owner__ = principal
+            self.context.add(obj)
+
+        if IDataObject.providedBy(obj):
+            self.store_object(obj, value)
+
+        self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
+                           ('Creation' if not update else 'Update', obj.name, obj.__name__))
+
+    def handle_error(self, f, request, obj, principal, update):
+        f.trap(Exception)
+        if request.finished:  # Should not be triggered at all
+            try:
+                f.raiseException()
+            except Exception:
+                log.error('Connection lost: cannot return error message to the client. %s', request,
+                          exc_info=True)
+            return
+
+        self.add_log_event(principal, '%s of %s (%s) via CDMI failed: %s: %s' %
+                           ('Creation' if not update else 'Update',
+                            obj.name, obj.__name__, type(f.value).__name__, f.value))
+
+        try:
+            f.raiseException()
+        except Exception:
+            log.debug('Error debugging info', exc_info=True)
+
+        request.setResponseCode(500)
+        request.write(json.dumps({'errorMessage': str(f.value)}))
+        request.finish()
+
+    def finish_response(self, r, request, obj, noncdmi=False):
+        if request.finished:  # Should not be triggered at all
+            log.error('Connection lost: cannot render resulting object. '
+                      'Modifications were saved. %s', request)
+            return
+        if not noncdmi:
+            request.write(self.render_object(obj))
+        request.finish()
+
     @response_headers
     def render_put(self, request):
-        data = self._parse_and_validate_data(request)
-
         existing_object = self.context if not hasattr(request, 'unresolved_path') else None
 
         requested_type = request.getHeader('content-type')
@@ -130,22 +180,29 @@ class CdmiView(HttpRestView):
             log.error('content-type not found in %s', request.getAllHeaders())
             raise BadRequest('No Content-Type specified')
 
-        if requested_type not in self.object_constructor_map.keys():
-            raise BadRequest('Don\'t know how to create objects of type: %s' % requested_type)
+        data = {}
+        noncdmi = False
 
-        if 'value' in data:
-            value = data['value']
-            data['value'] = None
+        if requested_type not in self.object_constructor_map.keys():
+            noncdmi = True
+            data[u'mimetype'] = requested_type
+            requested_type = 'application/cdmi-object'
+            value = request.content.read()
+            data[u'value'] = None
+        elif requested_type == 'application/cdmi-object':
+            data = self._parse_and_validate_data(request)
+            value = data.get('value', '')
+            data[u'value'] = None
         else:
-            value = ''
+            value = None
 
         if existing_object:
-            data['name'] = unicode(parse_path(request.path)[-1])
+            data[u'name'] = unicode(parse_path(request.path)[-1])
             form = CdmiObjectValidatorFactory.get_applier(existing_object, data)
             request.setHeader('content-type', self.object_type_map[existing_object.type])
             action = 'apply'
         else:
-            data['name'] = unicode(request.unresolved_path)
+            data[u'name'] = unicode(request.unresolved_path)
             requested_class = self.object_constructor_map[requested_type]
             form = CdmiObjectValidatorFactory.get_creator(requested_class, data)
             request.setHeader('content-type', requested_type)
@@ -158,56 +215,12 @@ class CdmiView(HttpRestView):
 
         result_object = getattr(form, action)()
 
-        @db.transact
-        def handle_success(r, request, obj, principal):
-            if not existing_object:
-                obj.__owner__ = principal
-                self.context.add(obj)
-
-            if IDataObject.providedBy(result_object):
-                storemgr = getAdapter(result_object, IDataStoreFactory).create()
-                storemgr.save(value)
-
-            self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
-                               ('Creation' if not existing_object else 'Update', obj.name, obj.__name__))
-
-        def finish_response(r, request, obj):
-            if request.finished:  # Should not be triggered at all
-                log.error('Connection lost: cannot render resulting object. '
-                          'Modifications were saved. %s', request)
-                return
-            request.write(self.render_object(obj))
-            request.finish()
-
-        def handle_error(f, request, obj, principal):
-            f.trap(Exception)
-            if request.finished:  # Should not be triggered at all
-                try:
-                    f.raiseException()
-                except Exception:
-                    log.error('Connection lost: cannot return error message to the client. %s', request,
-                              exc_info=True)
-                return
-
-            self.add_log_event(principal, '%s of %s (%s) via CDMI failed: %s: %s' %
-                               ('Creation' if not existing_object else 'Update',
-                                obj.name, obj.__name__, type(f.value).__name__, f.value))
-
-            try:
-                f.raiseException()
-            except Exception:
-                log.debug('Error debugging info', exc_info=True)
-
-            request.setResponseCode(500)
-            request.write(json.dumps({'errorMessage': str(f.value)}))
-            request.finish()
-
         principal = self.get_principal(request)
-        d = handle_success(None, request, result_object, principal)
+        d = self.handle_success(None, request, result_object, principal, existing_object, value)
         connection_lost = request.notifyFinish()
         connection_lost.addCallback(lambda r: d.cancel())
-        d.addCallback(finish_response, request, result_object)
-        d.addErrback(handle_error, request, result_object, principal)
+        d.addCallback(self.finish_response, request, result_object, noncdmi)
+        d.addErrback(self.handle_error, request, result_object, principal, existing_object)
 
         return NOT_DONE_YET
 
