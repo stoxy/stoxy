@@ -46,7 +46,7 @@ class CdmiRawDataApplier(RawDataApplier):
     def ignore_known_attributes(self, pair):
         attr, error = pair
         if isinstance(error, UnknownAttribute):
-            if attr in self.known_attributes:
+            if attr in self.ignored_attributes:
                 return False
         return True
 
@@ -67,8 +67,8 @@ class CdmiObjectValidatorFactory(object):
 
     @classmethod
     def get_creator(cls, requested_class, data):
-        return cls.creator_constructor_map.get(requested_class,
-                                               CdmiRawDataBuilder)(data, requested_class)
+        return cls.creator_constructor_map.get(
+            requested_class, CdmiRawDataBuilder)(data, requested_class)
 
     @classmethod
     def get_applier(cls, obj, data):

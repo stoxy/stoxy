@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ##
+import re
 import struct
 from base64 import b64encode, b16encode
 from uuid import uuid4
@@ -108,3 +109,14 @@ def crc16(s):
         tmp = crcValue ^ (ord(ch))
         crcValue = (crcValue >> 8) ^ crc16tab[(tmp & 0xff)]
     return crcValue
+
+
+URI_RE = re.compile(r'^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?')
+
+
+def parse_uri(uri):
+    """ Extract sections of URI """
+    match = URI_RE.match(uri)
+    if not match:
+        return
+    return match.group(2, 4, 5)

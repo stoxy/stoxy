@@ -53,12 +53,14 @@ class TestBasic(unittest.TestCase):
     def setUp(self):
         self._cleanup = []
         fh, self._filename = tempfile.mkstemp(prefix='libcdmi-test-')
+        with open(self._filename, 'w') as f:
+            f.write('\x12\0\0dlasdkasdlkasdlaskdlas\32\1\3\0\0\0\0')
         os.close(fh)  # allow opening by the library
 
     def tearDown(self):
         os.unlink(self._filename)
 
-        for method, args, kwargs in self._cleanup:
+        for method, args, kwargs in reversed(self._cleanup):
             method(*args, **kwargs)
 
     def addToCleanup(self, method, *args, **kw):
@@ -175,6 +177,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
         result_data = response.json()
-        self.assertEqual('application/cdmi-container', result_data['objectType'])
-        self.assertEqual('testcontainer', result_data['objectName'])
+        self.assertEqual('application/cdmi-object', result_data['objectType'])
+        self.assertEqual('testobject', result_data['objectName'])
+        self.assertTrue(len(content) > 0)
         self.assertEqual(content, result_data['value'])
