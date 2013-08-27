@@ -90,6 +90,7 @@ class RootStorageContainer(Container):
     def type(self):
         return RootStorageContainer
 
+
 class DataObjectsRootInjector(ContainerInjector):
     context(OmsRoot)
     __class__ = RootStorageContainer

@@ -9,7 +9,7 @@ from zope.component import getAdapter
 from opennode.oms.config import get_config
 
 from stoxy.server.model.dataobject import IDataObject
-from stoxy.server.model.store  import IDataStore, IDataStoreFactory
+from stoxy.server.model.store import IDataStore, IDataStoreFactory
 from stoxy.server.common import parse_uri
 
 
@@ -21,19 +21,23 @@ class FileStore(Adapter):
     context(IDataObject)
     name('file')
 
-    def save(self, data):
+    def save(self, datastream):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
         assert not host, host
+        b = 4096
         with open(path, 'wb') as f:
-            f.write(data)
+            d = datastream.read(b)
+            f.write(d)
+            while len(d) == b and not datastream.closed:
+                d = datastream.read(b)
+                f.write(d)
 
     def load(self):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
         assert not host, host
-        with open(path, 'r') as f:
-            return f.read()
+        return open(path, 'rb')
 
 
 class Blackhole(Adapter):
@@ -41,7 +45,7 @@ class Blackhole(Adapter):
     context(IDataObject)
     name('null')
 
-    def save(self, data):
+    def save(self, datastream):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
         assert not host, host
