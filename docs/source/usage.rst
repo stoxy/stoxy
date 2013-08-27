@@ -14,6 +14,10 @@ You can use `curl <http://curl.haxx.se/>`_ for constructing a valid CDMI request
 For example, to create a new container, run the following command (replace port
 8080 for the one where your Stoxy instance is listening):
 
+
+Creating/updating a container with CDMI content-type
+----------------------------------------------------
+
 .. code-block:: sh
 
   $ curl -v -u username:pass \
