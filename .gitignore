@@ -20,3 +20,13 @@ omsd.log
 twistd.pid
 .project
 .pydevproject
+db/data.fs
+db/data.fs.index
+db/data.fs.lock
+db/data.fs.tmp
+db/zeo.log
+*.log
+docs/doctrees/
+docs/html/
+docs/source/gen/
+
