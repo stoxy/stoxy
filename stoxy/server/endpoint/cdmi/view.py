@@ -105,7 +105,7 @@ class CdmiView(HttpRestView):
         cdmi = request.getHeader('X-CDMI-Specification-Version')
 
         if cdmi or not IDataObject.providedBy(self.context):
-            request.setHeader('Content-Type', self.context.object_type)
+            request.setHeader('Content-Type', self.object_type_map[self.context.type])
             return self.object_to_dict(self.context)
         else:
             return self.handle_noncdmi_get(request)
