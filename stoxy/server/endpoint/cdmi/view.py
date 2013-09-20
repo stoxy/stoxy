@@ -1,11 +1,15 @@
 import json
 import logging
 import functools
+import io
+import StringIO
 
 from grokcore.component import Adapter
 from grokcore.component import implements
 from grokcore.component import context
 from twisted.web.server import NOT_DONE_YET
+from twisted.internet import defer
+from twisted.internet.interfaces import IPullProducer
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import getAdapter
@@ -44,6 +48,34 @@ def response_headers(f):
     return _wrapper_for_render_method
 
 
+class DataStreamProducer(object):
+    implements(IPullProducer)
+
+    def __init__(self, consumer, datastream, begin=0, end=None):
+        self.consumer = consumer
+        self.datastream = datastream
+        self.begin = begin
+        self.end = end
+
+    def resumeProducing(self):
+        if self.datastream.tell() >= self.end:
+            self.consumer.finish()
+            log.debug('Finished writing data! %s:%s' % (self.begin, self.end))
+            return
+
+        if self.datastream.tell() < self.begin:
+            self.datastream.seek(self.begin)
+            log.debug('Seeked to %s' % self.begin)
+
+        log.debug('Writing data from datastream to response!')
+        data = self.datastream.read(min(2 ** 16,
+                                        max(0, self.end - self.datastream.tell() if self.end else 2 ** 16)))
+        self.consumer.write(data)
+
+    def stopProducing(self):
+        self.datastream.close()
+
+
 class CdmiView(HttpRestView):
 
     context(IInStorageContainer)
@@ -74,15 +106,15 @@ class CdmiView(HttpRestView):
                 'parentURI': obj.__parent__.__name__,
                 'parentID': parent_oid,
                 'completionStatus': 'Complete',  # TODO: report errors / incomplete status
-                'metadata': dict(obj.metadata),}
+                'metadata': dict(obj.metadata)}
 
         if IStorageContainer.providedBy(obj):
             data.update({'children': [(child.name if IDataObject.providedBy(child)
                                       else child.__name__) for child in obj.listcontent()],
                          'childrenrange': '0-%d' % len(obj.listcontent())})
         elif IDataObject.providedBy(obj) and data['completionStatus'] == 'Complete':
-            value = self.load_object(obj)
-            data.update({'value': value,
+            datastream = self.load_object(obj)
+            data.update({'value': datastream.read(),
                          'valuetransferencoding': 'utf-8'})
 
         data.update(self.get_additional_data(obj))
@@ -113,20 +145,21 @@ class CdmiView(HttpRestView):
     def handle_noncdmi_get(self, request):
         request.setHeader('Content-Type', self.context.mimetype.encode('ascii'))
         byterange = request.getHeader('Range')
+
+        begin = 0
+        end = None
+
         if byterange is not None:
             byterange = byterange.split('-')
             begin = int(byterange[0])
             end = int(byterange[1])
-            value = self.load_object(self.context)[begin:end]
-            # optimistic assumption that the requested object will have the same size
-            # TODO assert the assumption abov
-            request.setHeader('Content-Length', end - begin)
-        else:
-            request.setHeader('Content-Length', self.context.content_length)
-            value = self.load_object(self.context)
+            log.debug('Getting range %d:%d' % (begin, end))
 
-        request.write(value)
-        request.finish()
+        datastream = self.load_object(self.context)
+        connection_lost = request.notifyFinish()
+        connection_lost.addBoth(lambda r: request.unregisterProducer())
+        request.registerProducer(DataStreamProducer(request, datastream, begin, end), False)
+
         return NOT_DONE_YET
 
     def _parse_and_validate_data(self, request):
@@ -142,22 +175,22 @@ class CdmiView(HttpRestView):
 
         return data
 
-    def store_object(self, obj, data):
+    def store_object(self, obj, datastream):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        storemgr.save(data)
+        storemgr.save(datastream)
 
     def load_object(self, obj):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
         return storemgr.load()
 
     @db.transact
-    def handle_success(self, r, request, obj, principal, update, value):
+    def handle_success(self, r, request, obj, principal, update, dstream):
         if not update:
             obj.__owner__ = principal
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            self.store_object(obj, value)
+            self.store_object(obj, dstream)
 
         self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
                            ('Creation' if not update else 'Update', obj.name, obj.__name__))
@@ -178,6 +211,8 @@ class CdmiView(HttpRestView):
 
         try:
             f.raiseException()
+        except defer.CancelledError:
+            return
         except Exception:
             log.debug('Error debugging info', exc_info=True)
 
@@ -214,16 +249,15 @@ class CdmiView(HttpRestView):
             noncdmi = True
             data[u'mimetype'] = requested_type
             requested_type = 'application/cdmi-object'
-            value = request.content.read()
+            dstream = request.content
             data[u'value'] = None
             data[u'content_length'] = content_length
         elif requested_type == 'application/cdmi-object':
             data = self._parse_and_validate_data(request)
-            value = data.get('value', '')
+            dstream = StringIO.StringIO(data.get('value', ''))
             data[u'value'] = None
-            data[u'content_length'] = len(value)
         else:
-            value = None
+            dstream = io.BytesIO()
 
         if existing_object:
             data[u'name'] = unicode(parse_path(request.path)[-1])
@@ -245,9 +279,9 @@ class CdmiView(HttpRestView):
         result_object = getattr(form, action)()
 
         principal = self.get_principal(request)
-        d = self.handle_success(None, request, result_object, principal, existing_object, value)
+        d = self.handle_success(None, request, result_object, principal, existing_object, dstream)
         connection_lost = request.notifyFinish()
-        connection_lost.addCallback(lambda r: d.cancel())
+        connection_lost.addBoth(lambda r: d.cancel())
         d.addCallback(self.finish_response, request, result_object, noncdmi)
         d.addErrback(self.handle_error, request, result_object, principal, existing_object)
 
