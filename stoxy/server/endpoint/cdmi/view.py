@@ -31,10 +31,15 @@ from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
+from stoxy.server.model.capability import ISystemCapability
+from stoxy.server.model.capability import SystemCapability
+from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
+
 from stoxy.server.model.store import IDataStoreFactory
 from stoxy.server.model.form import CdmiObjectValidatorFactory
 from stoxy.server import common
+from stoxy.server.endpoint.cdmi import current_capabilities
 
 
 log = logging.getLogger(__name__)
@@ -85,7 +90,8 @@ class CdmiView(HttpRestView):
 
     object_type_map = {StorageContainer: 'application/cdmi-container',
                        RootStorageContainer: 'application/cdmi-container',
-                       DataObject: 'application/cdmi-object'}
+                       DataObject: 'application/cdmi-object',
+                       SystemCapability: 'application/cdmi-capability'}
 
     @classmethod
     def set_response_headers(cls, request):
@@ -98,7 +104,8 @@ class CdmiView(HttpRestView):
         return {}
 
     def object_to_dict(self, obj):
-        parent_oid = (obj.__parent__.oid if not IRootContainer.providedBy(obj) else None)
+        parent_oid = (obj.__parent__.oid if not (IRootContainer.providedBy(obj) or
+                                                 ISystemCapability.providedBy(obj)) else None)
 
         data = {'objectType': self.object_type_map[obj.type],
                 'objectID': obj.oid,
@@ -106,7 +113,10 @@ class CdmiView(HttpRestView):
                 'parentURI': obj.__parent__.__name__,
                 'parentID': parent_oid,
                 'completionStatus': 'Complete',  # TODO: report errors / incomplete status
-                'metadata': dict(obj.metadata)}
+                }
+
+        if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
+            data.update({'metadata': dict(obj.metadata)})
 
         if IStorageContainer.providedBy(obj):
             data.update({'children': [(child.name if IDataObject.providedBy(child)
@@ -116,6 +126,10 @@ class CdmiView(HttpRestView):
             datastream = self.load_object(obj)
             data.update({'value': datastream.read(),
                          'valuetransferencoding': 'utf-8'})
+        elif ISystemCapability.providedBy(obj):
+            data.update({'children': [],
+                         'childrenrange': '0-0',
+                         'capabilities': current_capabilities.system})
 
         data.update(self.get_additional_data(obj))
         return data
@@ -138,6 +152,7 @@ class CdmiView(HttpRestView):
 
         if cdmi or not IDataObject.providedBy(self.context):
             request.setHeader('Content-Type', self.object_type_map[self.context.type])
+            print self.object_type_map[self.context.type]
             return self.object_to_dict(self.context)
         else:
             return self.handle_noncdmi_get(request)
@@ -314,6 +329,12 @@ class DataObjectView(CdmiView):
     context(IDataObject)
     object_constructor = DataObject
     object_type = 'application/cdmi-object'
+
+
+class CapabilityView(CdmiView):
+    context(ISystemCapability)
+    object_constructor = SystemCapability
+    object_type = 'application/cdmi-capability'
 
 
 class StoxyViewFactory(Adapter):
