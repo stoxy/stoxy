@@ -118,7 +118,11 @@ class CdmiView(HttpRestView):
             begin = int(byterange[0])
             end = int(byterange[1])
             value = self.load_object(self.context)[begin:end]
+            # optimistic assumption that the requested object will have the same size
+            # TODO assert the assumption abov
+            request.setHeader('Content-Length', end - begin)
         else:
+            request.setHeader('Content-Length', self.context.content_length)
             value = self.load_object(self.context)
 
         request.write(value)
@@ -197,6 +201,7 @@ class CdmiView(HttpRestView):
         existing_object = self.context if not hasattr(request, 'unresolved_path') else None
 
         requested_type = request.getHeader('content-type')
+        content_length = request.getHeader('content-length')
 
         if requested_type is None:
             log.error('content-type not found in %s', request.getAllHeaders())
@@ -211,10 +216,12 @@ class CdmiView(HttpRestView):
             requested_type = 'application/cdmi-object'
             value = request.content.read()
             data[u'value'] = None
+            data[u'content_length'] = content_length
         elif requested_type == 'application/cdmi-object':
             data = self._parse_and_validate_data(request)
             value = data.get('value', '')
             data[u'value'] = None
+            data[u'content_length'] = len(value)
         else:
             value = None
 
