@@ -19,7 +19,7 @@ from base64 import b64encode, b16encode
 from uuid import uuid4
 
 
-CDMI_VERSION = '1.0.2'
+CDMI_VERSION = '1.0.1'
 
 BASE16_SIZE_MULTIPLIER = 2
 OBJECTID_MAX_BYTES = 40
