@@ -32,7 +32,7 @@ Edit ``stoxy.conf`` and add the following sections:
    # 'brew install openssl' and would be located at /usr/local/Cellar/openssl/1.0.1e/bin/openssl .
    openssl_cmd = /usr/local/Cellar/openssl/1.0.1e/bin/openssl
 
-Example Keystone CAs could be taken from ``Keystone's repository <https://github.com/openstack/keystone/tree/master/examples/pki>`_.
+Example Keystone CAs could be taken from `Keystone's repository <https://github.com/openstack/keystone/tree/master/examples/pki>`_.
 
 Keystone usage example
 ======================
