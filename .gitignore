@@ -29,4 +29,5 @@ db/zeo.log
 docs/doctrees/
 docs/html/
 docs/source/gen/
-
+docs/Makefile
+docs/make.bat
