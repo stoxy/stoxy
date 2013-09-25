@@ -16,14 +16,21 @@ is listening):
 
 .. code-block:: sh
 
-  $ curl -v -u username:pass \
+   $ curl -v -u username:pass \
         -H 'x-cdmi-specification-version: 1.0.2' \
         -H 'content-type: application/cdmi-container' \
         -H 'accept:application/cdmi-container' \
-        -X PUT http://cdmiserver:8080/newcontainer
+        -X PUT http://cdmiserver:8080/storage/newcontainer
+
+Create an object with non-CDMI data object (more efficient):
+
+.. code-block:: sh
+
+   $ curl -u username:pass \
+          --data-binary @/path/to/big/big/file.iso \
+          -v -X PUT localhost:8080/storage/larger-file
 
 Refer to `CDMI reference <http://cdmi.sniacloud.com/>`_ for more precise header/body specification. 
-
 
 
 .. _libcdmi-python: https://github.com/stoxy/libcdmi-python

@@ -24,7 +24,7 @@ Documentation
    intro
    usage
    ops
-
+   security
 
 Module documentation
 ====================
