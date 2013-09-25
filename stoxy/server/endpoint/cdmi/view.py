@@ -33,7 +33,6 @@ from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.capability import ISystemCapability
 from stoxy.server.model.capability import SystemCapability
-from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
 
 from stoxy.server.model.store import IDataStoreFactory
