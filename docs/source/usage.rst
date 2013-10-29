@@ -7,6 +7,25 @@ libcdmi-python
 A python library (`libcdmi-python`_) was written to simplify interactions with Stoxy. Examples of usage can be directly taken
 from `unit tests`_.
 
+.. code-block: py
+   #!/usr/bin/env python
+   import sys
+   import json
+      
+   import libcdmi
+   
+   server = 'http://localhost:8080'
+   
+   c = libcdmi.open(server, credentials=('john', 'john'))
+   
+   response = c.create_object('/storage/path/on/storage', 'local-file-for-upload',
+                               metadata={'event name': 'SNIA SDC 2013',
+                                         'event location': 'Santa Clara, CA'})
+   
+   print json.dumps(response, sort_keys=True,
+                   indent=4, separators=(',', ': '))
+
+
 cURL
 ----
 
