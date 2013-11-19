@@ -2,6 +2,7 @@
 Module for data managers tasked with storage of CDMI object data
 """
 import logging
+import os
 
 from grokcore.component import implements, name, Adapter, context
 from zope.component import getAdapter
@@ -26,6 +27,7 @@ class FileStore(Adapter):
         assert protocol == 'file', protocol
         assert not host, host
         b = 4096
+        log.debug('Writing file: "%s"' % path)
         with open(path, 'wb') as f:
             d = datastream.read(b)
             f.write(d)
@@ -38,6 +40,13 @@ class FileStore(Adapter):
         assert protocol == 'file', protocol
         assert not host, host
         return open(path, 'rb')
+
+    def delete(self):
+        protocol, host, path = parse_uri(self.context.value)
+        assert protocol == 'file', protocol
+        assert not host, host
+        log.debug('Unlinking "%s"' % path)
+        os.unlink(path)
 
 
 class Blackhole(Adapter):

@@ -8,6 +8,10 @@ import tempfile
 
 from mock import MagicMock
 
+import config
+
+from opennode.oms.config import get_config
+
 try:
     import libcdmi
 except ImportError:
@@ -19,12 +23,9 @@ log = logging.getLogger(__name__)
 _server_is_up = False
 
 
-DEFAULT_ENDPOINT = 'http://localhost:8080/storage'
-
-
 def server_is_up():
     try:
-        response = requests.get(DEFAULT_ENDPOINT, auth=('admin', 'admin'))
+        response = requests.get(config.DEFAULT_ENDPOINT, auth=config.CREDENTIALS)
     except requests.ConnectionError:
         _server_is_up = False
         log.debug('Server is down: connection error!')
@@ -32,6 +33,7 @@ def server_is_up():
         if response.status_code >= 400:
             _server_is_up = False
             log.debug('Server returned status code %s' % response.status_code)
+            print ('Server returned status code %s' % response.status_code)
         elif type(libcdmi) is MagicMock:
             _server_is_up = False
             log.debug('libcdmi-python is unavailable -- server is "down"')
@@ -45,9 +47,9 @@ NotThere = '<NotThere>'
 
 
 class TestBasic(unittest.TestCase):
-    _endpoint = DEFAULT_ENDPOINT
+    _endpoint = config.DEFAULT_ENDPOINT
     _mock_up_marker = object()
-    _credentials = ('admin', 'admin')
+    _credentials = config.CREDENTIALS
     _base_headers = libcdmi.common.HEADER_CDMI_VERSION
 
     def setUp(self):
@@ -135,7 +137,7 @@ class TestBasic(unittest.TestCase):
                                 headers=headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-container')
 
         result_data = response.json()
@@ -173,7 +175,7 @@ class TestBasic(unittest.TestCase):
                                 headers=object_headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
         result_data = response.json()
@@ -201,7 +203,7 @@ class TestBasic(unittest.TestCase):
                                 headers=object_headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
         result_data = response.text  # Response body is not required
@@ -236,3 +238,41 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(len(response.text), 5)
         self.assertEqual(response.text, content[10:15])
         self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_delete_object(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/octet-stream'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+
+        # XXX: when used from the unit test, get_config() gives only the OMS config, so need to specify
+        # the base path in OMS config too
+        stoxy_filepath = '%s/%s' % (get_config().getstring('store', 'file_base_path', '/storage'),
+                                    'testobject')
+
+        self.assertTrue(os.path.exists(stoxy_filepath),
+                        'File "%s" does not exist after creation of model object!' % stoxy_filepath)
+
+        delete_response = requests.delete(self._endpoint + '/testcontainer/testobject',
+                                          auth=self._credentials,)
+        self.assertEqual(200, delete_response.status_code, delete_response.text)
+
+        response = requests.get(self._endpoint + '/testcontainer/testobject',
+                                auth=self._credentials,)
+        self.assertEqual(404, response.status_code, 'Object was not deleted!')
+
+        self.assertTrue(not os.path.exists(stoxy_filepath),
+                        'File "%s" exists after deletion of model object!' % stoxy_filepath)
