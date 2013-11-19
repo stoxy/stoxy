@@ -2,14 +2,11 @@ from __future__ import absolute_import
 
 from grokcore.component import context, implements
 from zope import schema
-from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface
 
-from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector
 from opennode.oms.model.model.base import IDisplayName
-from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.root import OmsRoot
 
 from stoxy.server import common
@@ -21,7 +18,7 @@ class ISystemCapability(Interface):
                           min_length=common.OBJECTID_MIN_BYTES * common.BASE16_SIZE_MULTIPLIER,
                           required=False)
     capabilities = schema.Dict(title=u'Capabilities', key_type=schema.TextLine(),
-                           value_type=schema.TextLine(), required=False)
+                               value_type=schema.TextLine(), required=False)
 
 
 class SystemCapability(Container):

@@ -22,7 +22,7 @@ class IDataObject(Interface):
     metadata = schema.Dict(title=u'Metadata', key_type=schema.TextLine(), value_type=schema.TextLine(),
                            required=False)
     content_length = schema.Int(title=u"Content length", description=u"Content length of the object",
-                                    required=False)
+                                required=False)
 
 
 class DataObject(Model):

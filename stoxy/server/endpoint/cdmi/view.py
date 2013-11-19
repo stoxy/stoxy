@@ -13,6 +13,7 @@ from twisted.internet.interfaces import IPullProducer
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import getAdapter
+from zope.component import handle
 from zope.component import queryAdapter
 
 from opennode.oms.endpoint.httprest.base import IHttpRestView
@@ -21,6 +22,7 @@ from opennode.oms.endpoint.httprest.base import IHttpRestSubViewFactory
 from opennode.oms.endpoint.httprest.root import BadRequest
 from opennode.oms.endpoint.httprest.root import NotFound
 from opennode.oms.log import UserLogger
+from opennode.oms.model.model.events import ModelDeletedEvent
 from opennode.oms.model.traversal import parse_path
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
@@ -308,6 +310,7 @@ class CdmiView(HttpRestView):
         if existing_object:
             log.debug('Deleting %s', self.context)
             del self.context.__parent__[name]
+            handle(self.context, ModelDeletedEvent(self.context.__parent__))
         else:
             raise NotFound
 
@@ -315,7 +318,6 @@ class CdmiView(HttpRestView):
         owner = self.context.__owner__
         ulog = UserLogger(principal=principal, subject=self.context, owner=owner)
         ulog.log(msg, *args, **kwargs)
-        log.debug('%s %s', principal.id, msg, *args, **kwargs)
 
 
 class DataContainerView(CdmiView):
