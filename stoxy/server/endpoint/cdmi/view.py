@@ -164,11 +164,11 @@ class CdmiView(HttpRestView):
                 yield ('capabilities', lambda: current_capabilities.system)
 
         # filter for requested attributes
-        filtered_generator = filter(lambda (k, vg): filter_attr(k, attrs),
-                                    object_data_generator(obj, attrs=attrs))
+        filtered_generator = [(k, vg) for k, vg in object_data_generator(obj, attrs=attrs)
+                              if filter_attr(k, attrs)]
 
         # evaluate generators and construct the final dict
-        data = dict(map(lambda (k, vg): (k, vg()), filtered_generator))
+        data = dict([(k, vg()) for k, vg  in filtered_generator])
         data.update(self.get_additional_data(obj, attrs=attrs))
         return data
 
