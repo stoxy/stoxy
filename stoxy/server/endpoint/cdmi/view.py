@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import functools
@@ -56,27 +57,35 @@ def response_headers(f):
 
 class DataStreamProducer(object):
     implements(IPullProducer)
-
-    def __init__(self, consumer, datastream, begin=0, end=None):
+    MAX_CHUNK = 2 ** 16
+    def beginSendingData(self, datastream, consumer, begin=0, end=None):
         self.consumer = consumer
         self.datastream = datastream
         self.begin = begin
         self.end = end
+        self.deferred = deferred = defer.Deferred()
+        self.lastSent = ''
+        self.consumer.registerProducer(self, False)
+        return deferred
 
     def resumeProducing(self):
         if self.datastream.tell() >= self.end:
+            log.debug('Finished writing data! %s->%s:%s' % (self.datastream.tell(), self.begin, self.end))
+            self.datastream = None
+            self.consumer.unregisterProducer()
+            if self.deferred:
+                self.deferred.callback(self.lastSent)
+                self.deferred = None
             self.consumer.finish()
-            log.debug('Finished writing data! %s:%s' % (self.begin, self.end))
             return
 
         if self.datastream.tell() < self.begin:
             self.datastream.seek(self.begin)
-            log.debug('Seeked to %s' % self.begin)
 
-        log.debug('Writing data from datastream to response!')
-        data = self.datastream.read(min(2 ** 16,
-                                        max(0, self.end - self.datastream.tell() if self.end else 2 ** 16)))
+        data = self.datastream.read(min(self.MAX_CHUNK, max(0, self.end - self.datastream.tell()
+                                                            if self.end else self.MAX_CHUNK)))
         self.consumer.write(data)
+        self.lastSent = data[-1:]
 
     def stopProducing(self):
         self.datastream.close()
@@ -101,38 +110,66 @@ class CdmiView(HttpRestView):
     def render_object(self, obj):
         return json.dumps(self.object_to_dict(obj), cls=JsonSetEncoder)
 
-    def get_additional_data(self, obj):
+    def get_additional_data(self, obj, attrs=None):
         return {}
 
-    def object_to_dict(self, obj):
-        parent_oid = (obj.__parent__.oid if not (IRootContainer.providedBy(obj) or
-                                                 ISystemCapability.providedBy(obj)) else None)
+    def object_to_dict(self, obj, attrs=None):
 
-        data = {'objectType': self.object_type_map[obj.type],
-                'objectID': obj.oid,
-                'objectName': obj.name,
-                'parentURI': obj.__parent__.__name__,
-                'parentID': parent_oid,
-                'completionStatus': 'Complete',  # TODO: report errors / incomplete status
-                }
+        def filter_attr(attr, attrs):
+            return not attrs or attr in attrs.keys()
 
-        if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
-            data.update({'metadata': dict(obj.metadata)})
-
-        if IStorageContainer.providedBy(obj):
-            data.update({'children': [(child.name if IDataObject.providedBy(child)
-                                      else child.__name__) for child in obj.listcontent()],
-                         'childrenrange': '0-%d' % len(obj.listcontent())})
-        elif IDataObject.providedBy(obj) and data['completionStatus'] == 'Complete':
+        def get_data(obj, begin=0, end=None):
             datastream = self.load_object(obj)
-            data.update({'value': datastream.read(),
-                         'valuetransferencoding': 'utf-8'})
-        elif ISystemCapability.providedBy(obj):
-            data.update({'children': [],
-                         'childrenrange': '0-0',
-                         'capabilities': current_capabilities.system})
 
-        data.update(self.get_additional_data(obj))
+            if datastream.tell() < begin:
+                datastream.seek(begin)
+
+            if isinstance(end, int):
+                data = datastream.read(end - begin)
+            else:
+                data = datastream.read()
+
+            return base64.b64encode(data)
+
+        def object_data_generator(obj, attrs=dict()):
+            yield ('objectType', lambda: self.object_type_map[obj.type])
+            yield ('objectID', lambda: obj.oid)
+            yield ('objectName', lambda: obj.name)
+            yield ('parentURI', lambda: obj.__parent__.__name__)
+            yield ('parentID', lambda: (obj.__parent__.oid
+                                        if (not IRootContainer.providedBy(obj)
+                                            and not ISystemCapability.providedBy(obj))
+                                        else None))
+            yield ('completionStatus', lambda: 'Complete')  # TODO: report errors / incomplete status
+            isComplete = True
+
+            if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
+                yield ('metadata', lambda: dict(obj.metadata))
+
+            if IStorageContainer.providedBy(obj):
+                yield ('children', lambda: [(child.name if IDataObject.providedBy(child)
+                                             else child.__name__) for child in obj.listcontent()])
+                yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
+            elif IDataObject.providedBy(obj) and isComplete:
+                if attrs and 'value' in attrs:
+                    begin, end = attrs['value']
+                else:
+                    begin = 0
+                    end = None
+                yield ('value', lambda: get_data(obj, begin=begin, end=end))
+                yield ('valuetransferencoding', lambda: 'base64')
+            elif ISystemCapability.providedBy(obj):
+                yield ('children', lambda: [])
+                yield ('childrenrange', lambda: '0-0'),
+                yield ('capabilities', lambda: current_capabilities.system)
+
+        # filter for requested attributes
+        filtered_generator = filter(lambda (k, vg): filter_attr(k, attrs),
+                                    object_data_generator(obj, attrs=attrs))
+
+        # evaluate generators and construct the final dict
+        data = dict(map(lambda (k, vg): (k, vg()), filtered_generator))
+        data.update(self.get_additional_data(obj, attrs=attrs))
         return data
 
     def get_principal(self, request):
@@ -153,12 +190,26 @@ class CdmiView(HttpRestView):
 
         if cdmi or not IDataObject.providedBy(self.context):
             request.setHeader('Content-Type', self.object_type_map[self.context.type])
-            print self.object_type_map[self.context.type]
-            return self.object_to_dict(self.context)
+            log.debug('Received arguments: %s', request.args)
+            attrs = dict(self.parse_args_to_filter_attrs(request.args))
+            return self.object_to_dict(self.context, attrs=attrs)
         else:
             return self.handle_noncdmi_get(request)
 
+    def parse_args_to_filter_attrs(self, args):
+        for key, val in args.iteritems():
+            if key == 'value':
+                values = map(int, val)
+                begin = min(values)
+                end = max(values)
+                yield ('value', [begin, end])
+            elif key == 'metadata':
+                yield ('metadata', val)
+            else:
+                yield (key, None)
+
     def handle_noncdmi_get(self, request):
+        log.debug('Processing request as non-CDMI')
         request.setHeader('Content-Type', self.context.mimetype.encode('ascii'))
         byterange = request.getHeader('Range')
 
@@ -166,15 +217,12 @@ class CdmiView(HttpRestView):
         end = None
 
         if byterange is not None:
-            byterange = byterange.split('-')
-            begin = int(byterange[0])
-            end = int(byterange[1])
+            begin, end = map(int, byterange.split('-'))
             log.debug('Getting range %d:%d' % (begin, end))
 
         datastream = self.load_object(self.context)
-        connection_lost = request.notifyFinish()
-        connection_lost.addBoth(lambda r: request.unregisterProducer())
-        request.registerProducer(DataStreamProducer(request, datastream, begin, end), False)
+        d = DataStreamProducer().beginSendingData(datastream, request, begin, end)
+        d.addBoth(lambda r: log.debug('Finished sending data'))
 
         return NOT_DONE_YET
 
@@ -191,22 +239,22 @@ class CdmiView(HttpRestView):
 
         return data
 
-    def store_object(self, obj, datastream):
+    def store_object(self, obj, datastream, encoding):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        storemgr.save(datastream)
+        storemgr.save(datastream, encoding)
 
     def load_object(self, obj):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
         return storemgr.load()
 
     @db.transact
-    def handle_success(self, r, request, obj, principal, update, dstream):
+    def handle_success(self, r, request, obj, principal, update, dstream, encoding):
         if not update:
             obj.__owner__ = principal
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            self.store_object(obj, dstream)
+            self.store_object(obj, dstream, encoding)
 
         self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
                            ('Creation' if not update else 'Update', obj.name, obj.__name__))
@@ -295,7 +343,8 @@ class CdmiView(HttpRestView):
         result_object = getattr(form, action)()
 
         principal = self.get_principal(request)
-        d = self.handle_success(None, request, result_object, principal, existing_object, dstream)
+        d = self.handle_success(None, request, result_object, principal, existing_object, dstream,
+                                data.get(u'valuetransferencoding', 'utf-8'))
         connection_lost = request.notifyFinish()
         connection_lost.addBoth(lambda r: d.cancel())
         d.addCallback(self.finish_response, request, result_object, noncdmi)
