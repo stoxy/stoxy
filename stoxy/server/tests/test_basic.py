@@ -292,7 +292,7 @@ class TestBasic(unittest.TestCase):
         self.assertTrue(not os.path.exists(stoxy_filepath),
                         'File "%s" exists after deletion of model object!' % stoxy_filepath)
 
-    @unittest.skip('Known to be broken: TODO: implement custom arguments parsing')
+    @unittest.skipUnless(config.FULL_TEST, 'Known to be broken: TODO: implement custom arguments parsing')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_get_specific_fields_using_get_cdmi_params(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -312,13 +312,19 @@ class TestBasic(unittest.TestCase):
 
         self.assertEqual(200, response.status_code, response.text)
 
-        response = requests.get(self._endpoint + '/testcontainer/testobject?ObjectID;ParentURI',
+        response = requests.get(self._endpoint + '/testcontainer/testobject?objectID;parentURI;value:1-6',
                                 auth=self._credentials,
                                 headers=object_headers)
 
         self.assertEqual(200, response.status_code, response.text)
         self.assertTrue(len(response.text) > 0, 'Response was empty!')
-        self.assertTrue(len(response.json().keys()) == 1, 'There were <> 1 keys in the response data')
+        data = response.json()
+        self.assertEqual(3, len(data), 'There were <> 3 keys in the response data: %s' % response.json())
+        self.assertTrue('value' in data.keys(), 'value is not in data (%s)!' % data)
+        self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
+        self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
+        self.assertEqual('EgAAYXM=', data['value'], data['value'])
+        self.assertEqual(content[1:6], base64.b64decode(data['value']))
 
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_get_specific_fields_using_get_http_params(self):
