@@ -58,6 +58,7 @@ def response_headers(f):
 class DataStreamProducer(object):
     implements(IPullProducer)
     MAX_CHUNK = 2 ** 16
+
     def beginSendingData(self, datastream, consumer, begin=0, end=None):
         self.consumer = consumer
         self.datastream = datastream
@@ -168,7 +169,7 @@ class CdmiView(HttpRestView):
                               if filter_attr(k, attrs)]
 
         # evaluate generators and construct the final dict
-        data = dict([(k, vg()) for k, vg  in filtered_generator])
+        data = dict([(k, vg()) for k, vg in filtered_generator])
         data.update(self.get_additional_data(obj, attrs=attrs))
         return data
 
