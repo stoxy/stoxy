@@ -23,6 +23,7 @@ Documentation
 
    intro
    usage
+   cli_usage
    ops
    security
 
@@ -31,7 +32,6 @@ Module documentation
 
 .. toctree::
    :maxdepth: 2
-   
    gen/modules
 
 .. _CDMI protocol: http://cdmi.sniacloud.com
