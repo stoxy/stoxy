@@ -9,9 +9,6 @@ from mock import MagicMock
 from stoxy.server.tests import config
 from stoxy.server.tests.common import server_is_up
 
-import pprint
-import sys
-pprint.pprint(sys.path)
 try:
     import libcdmi
 except ImportError:
@@ -53,6 +50,12 @@ class TestCLITool(unittest.TestCase):
         self.addToCleanup(setattr, container, object_name, old_value)
         return new_value
 
+    def run_cli_with_args(self, raw_args, print_=False):
+        parser = libcdmi.cli.create_parser()
+        args = parser.parse_args(raw_args)
+        response = libcdmi.cli.run(args, print_=print_)
+        return response
+
     def cleanup_object(self, name):
         try:
             requests.delete(self._endpoint + name, auth=self._credentials)
@@ -69,10 +72,113 @@ class TestCLITool(unittest.TestCase):
     @unittest.skipUnless(server_is_up(), 'Server is not running!')
     def test_create_container(self):
         raw_args = ['create_container',
-                    self._endpoint + '/testcontainer/',
+                    self._endpoint + '/testcontainer123123/',
+                    '-u', ':'.join(self._credentials)]
+        response = self.run_cli_with_args(raw_args)
+        self.assertEqual('testcontainer123123', response.get('objectName'))
+
+    @unittest.skipUnless(server_is_up(), 'Server is not running!')
+    def test_create_object(self):
+        raw_args = ['create_object',
+                    self._endpoint + '/testobject12312',
                     '-u', ':'.join(self._credentials),
-                    '--o', 'json']
-        parser = libcdmi.cli.create_parser()
-        args = parser.parse_args(raw_args)
-        response = libcdmi.cli.run(args, print_=False)
-        self.assertEqual('testcontainer', response.get('name'))
+                    '-f', self._filename]
+        response = self.run_cli_with_args(raw_args)
+        self.assertEqual('testobject12312', response.get('objectName'))
+
+    @unittest.skipUnless(server_is_up(), 'Server is not running!')
+    def test_get_object(self):
+        raw_args = ['create_object',
+                    self._endpoint + '/testobject',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+
+        response = self.run_cli_with_args(raw_args)
+        orig_objectid = response.get('objectID')
+
+        raw_args = ['get',
+                    self._endpoint + '/testobject',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+
+        response = self.run_cli_with_args(raw_args)
+
+        self.assertEqual('testobject', response.get('objectName'))
+        self.assertEqual(orig_objectid, response.get('objectID'))
+
+    @unittest.skip('HEAD is not implemented in Stoxy yet')
+    @unittest.skipUnless(server_is_up(), 'Server is not running!')
+    def test_head_object(self):
+        raw_args = ['create_object',
+                    self._endpoint + '/testobject',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+
+        response = self.run_cli_with_args(raw_args)
+        orig_objectid = response.get('objectID')
+
+        raw_args = ['head',
+                    self._endpoint + '/testobject',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+
+        response = self.run_cli_with_args(raw_args)
+
+        self.assertEqual('testobject', response.get('objectName'))
+        self.assertEqual(orig_objectid, response.get('objectID'))
+
+    @unittest.skipUnless(server_is_up(), 'Server is not running!')
+    def test_delete_object_and_container(self):
+        raw_args = ['create_container',
+                    self._endpoint + '/testcontainertodelete/',
+                    '-u', ':'.join(self._credentials)]
+        response = self.run_cli_with_args(raw_args)
+
+        raw_args = ['create_object',
+                    self._endpoint + '/testcontainertodelete/testobjecttodelete',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+        response = self.run_cli_with_args(raw_args)
+
+        raw_args = ['delete',
+                    self._endpoint + '/testcontainertodelete/testobjecttodelete',
+                    '-u', ':'.join(self._credentials)]
+
+        response = self.run_cli_with_args(raw_args)
+
+        self.assertEqual(None, response)
+
+        raw_args = ['get',
+                    self._endpoint + '/testcontainertodelete/testobjecttodelete',
+                    '-u', ':'.join(self._credentials)]
+
+        self.assertRaises(libcdmi.HTTPError, self.run_cli_with_args, raw_args)
+
+        raw_args = ['delete',
+                    self._endpoint + '/testcontainertodelete/',
+                    '-u', ':'.join(self._credentials),
+                    '-f', self._filename]
+
+        response = self.run_cli_with_args(raw_args)
+
+        self.assertEqual(None, response)
+
+        raw_args = ['get',
+                    self._endpoint + '/testcontainertodelete/',
+                    '-u', ':'.join(self._credentials)]
+
+        self.assertRaises(libcdmi.HTTPError, self.run_cli_with_args, raw_args)
+
+    @unittest.skipUnless(server_is_up(), 'Server is not running!')
+    def test_create_object_no_filename_meaningful_error(self):
+        raw_args = ['create_object',
+                    self._endpoint + '/testobject',
+                    '-u', ':'.join(self._credentials)]
+
+        try:
+            response = self.run_cli_with_args(raw_args)
+        except TypeError:
+            self.fail('Wrong arguments not handled correctly')
+
+        self.assertTrue('_error' in response, '_error element was not in response!')
+        self.assertEqual('Filename is mandatory with create_object', response['_error'])
