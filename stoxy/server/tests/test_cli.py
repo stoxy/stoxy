@@ -91,7 +91,8 @@ class TestCLITool(unittest.TestCase):
         raw_args = ['create_object',
                     self._endpoint + '/testobject',
                     '-u', ':'.join(self._credentials),
-                    '-f', self._filename]
+                    '-f', self._filename,
+                    '-m', 'text/html']
 
         response = self.run_cli_with_args(raw_args)
         orig_objectid = response.get('objectID')
