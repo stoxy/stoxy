@@ -8,53 +8,35 @@ import tempfile
 
 from mock import MagicMock
 
+import config
+
+from opennode.oms.config import get_config
+
+from stoxy.server.tests.common import server_is_up
+from stoxy.server.tests.common import NotThere
+
+
 try:
     import libcdmi
 except ImportError:
-    print ('To test, you need to enable libcdmi-python in development mode (see docs)')
+    print ('You need to enable libcdmi-python in development mode (see docs)')
     libcdmi = MagicMock()
 
 
 log = logging.getLogger(__name__)
-_server_is_up = False
-
-
-DEFAULT_ENDPOINT = 'http://localhost:8080/storage'
-
-
-def server_is_up():
-    try:
-        response = requests.get(DEFAULT_ENDPOINT, auth=('admin', 'admin'))
-    except requests.ConnectionError:
-        _server_is_up = False
-        log.debug('Server is down: connection error!')
-    else:
-        if response.status_code >= 400:
-            _server_is_up = False
-            log.debug('Server returned status code %s' % response.status_code)
-        elif type(libcdmi) is MagicMock:
-            _server_is_up = False
-            log.debug('libcdmi-python is unavailable -- server is "down"')
-        else:
-            _server_is_up = True
-            log.debug('Server is up!')
-    return _server_is_up
-
-
-NotThere = '<NotThere>'
 
 
 class TestBasic(unittest.TestCase):
-    _endpoint = DEFAULT_ENDPOINT
+    _endpoint = config.DEFAULT_ENDPOINT
     _mock_up_marker = object()
-    _credentials = ('admin', 'admin')
+    _credentials = config.CREDENTIALS
     _base_headers = libcdmi.common.HEADER_CDMI_VERSION
 
     def setUp(self):
         self._cleanup = []
         fh, self._filename = tempfile.mkstemp(prefix='libcdmi-test-')
         with open(self._filename, 'w') as f:
-            f.write('\xff\x12\0\0dlasdkasdlkasdlaskdlas\x91\x01\x03\0\0\0\0')
+            f.write('\xff\x12\0\0asdfgkasdlkasdlaskdlas\x91\x01\x03\0\0\0\0')
         os.close(fh)  # allow opening by the library
 
     def tearDown(self):
@@ -80,9 +62,10 @@ class TestBasic(unittest.TestCase):
         except Exception:
             pass
 
-    def _make_headers(self, headers):
+    def _make_headers(self, headers, cdmi=True):
         final_headers = {}
-        final_headers.update(self._base_headers)
+        if cdmi:
+            final_headers.update(self._base_headers)
         final_headers.update(headers)
         return final_headers
 
@@ -135,7 +118,7 @@ class TestBasic(unittest.TestCase):
                                 headers=headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-container')
 
         result_data = response.json()
@@ -173,13 +156,15 @@ class TestBasic(unittest.TestCase):
                                 headers=object_headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
         result_data = response.json()
         self.assertEqual('application/cdmi-object', result_data['objectType'])
         self.assertEqual('testobject', result_data['objectName'])
         self.assertTrue(len(result_data['value']) > 0)
+        self.assertEqual(base64.b64decode(content),
+                         base64.b64decode(result_data['value']))
         self.assertEqual(content, result_data['value'])
 
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
@@ -190,7 +175,8 @@ class TestBasic(unittest.TestCase):
         c.create_container('/testcontainer/')
 
         object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
-                                             'Content-Type': 'application/binary'})
+                                             'Content-Type': 'application/binary'},
+                                            cdmi=False)
 
         with open(self._filename, 'rb') as input_file:
             content = input_file.read()
@@ -201,7 +187,7 @@ class TestBasic(unittest.TestCase):
                                 headers=object_headers)
 
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.2')
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
         self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
 
         result_data = response.text  # Response body is not required
@@ -215,7 +201,8 @@ class TestBasic(unittest.TestCase):
         c.create_container('/testcontainer/')
 
         object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
-                                             'Content-Type': 'application/octet-stream'})
+                                             'Content-Type': 'application/octet-stream'},
+                                            cdmi=False)
 
         with open(self._filename, 'rb') as input_file:
             content = input_file.read()
@@ -236,3 +223,119 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(len(response.text), 5)
         self.assertEqual(response.text, content[10:15])
         self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
+
+        # TODO: test non-CDMI request optional Range header functionality
+        noncdmi_headers = {'Range': '1-6'}
+        response = requests.get(self._endpoint + '/testcontainer/testobject',
+                                auth=self._credentials,
+                                headers=noncdmi_headers)
+
+        self.assertEqual(5, len(response.text))
+        self.assertEqual(response.text, content[1:6])
+        self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_delete_object(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/octet-stream'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+
+        # XXX: when used from the unit test, get_config() gives only the OMS config, so need to specify
+        # the base path in OMS config too
+        stoxy_filepath = '%s/%s' % (get_config().getstring('store', 'file_base_path', '/storage'),
+                                    'testobject')
+
+        self.assertTrue(os.path.exists(stoxy_filepath),
+                        'File "%s" does not exist after creation of model object!' % stoxy_filepath)
+
+        delete_response = requests.delete(self._endpoint + '/testcontainer/testobject',
+                                          auth=self._credentials,)
+        self.assertEqual(200, delete_response.status_code, delete_response.text)
+
+        response = requests.get(self._endpoint + '/testcontainer/testobject',
+                                auth=self._credentials,)
+        self.assertEqual(404, response.status_code, 'Object was not deleted!')
+
+        self.assertTrue(not os.path.exists(stoxy_filepath),
+                        'File "%s" exists after deletion of model object!' % stoxy_filepath)
+
+    @unittest.skipUnless(config.FULL_TEST, 'Known to be broken: TODO: implement custom arguments parsing')
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_get_specific_fields_using_get_cdmi_params(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/octet-stream'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+
+        response = requests.get(self._endpoint + '/testcontainer/testobject?objectID;parentURI;value:1-6',
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertTrue(len(response.text) > 0, 'Response was empty!')
+        data = response.json()
+        self.assertEqual(3, len(data), 'There were <> 3 keys in the response data: %s' % response.json())
+        self.assertTrue('value' in data.keys(), 'value is not in data (%s)!' % data)
+        self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
+        self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
+        self.assertEqual('EgAAYXM=', data['value'], data['value'])
+        self.assertEqual(content[1:6], base64.b64decode(data['value']))
+
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_get_specific_fields_using_get_http_params(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': 'application/octet-stream'})
+
+        with open(self._filename, 'rb') as input_file:
+            content = input_file.read()
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                content,
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+
+        response = requests.get(self._endpoint + ('/testcontainer/testobject?'
+                                                  'objectID=true&parentURI=true&value=1&value=6'),
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertTrue(len(response.text) > 0, 'Response was empty!')
+        data = response.json()
+        self.assertEqual(3, len(data), 'There were <> 3 keys in the response data: %s' % response.json())
+        self.assertTrue('value' in data.keys(), 'value is not in data (%s)!' % data)
+        self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
+        self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
+        self.assertEqual('EgAAYXM=', data['value'], data['value'])
+        self.assertEqual(content[1:6], base64.b64decode(data['value']))

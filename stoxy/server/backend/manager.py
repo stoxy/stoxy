@@ -1,7 +1,9 @@
 """
 Module for data managers tasked with storage of CDMI object data
 """
+import base64
 import logging
+import os
 
 from grokcore.component import implements, name, Adapter, context
 from zope.component import getAdapter
@@ -21,13 +23,16 @@ class FileStore(Adapter):
     context(IDataObject)
     name('file')
 
-    def save(self, datastream):
+    def save(self, datastream, encoding):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
         assert not host, host
-        b = 4096
+        b = 6 * 1024
+        log.debug('Writing file: "%s"' % path)
         with open(path, 'wb') as f:
             d = datastream.read(b)
+            if encoding == 'base64':
+                d = base64.b64decode(d)
             f.write(d)
             while len(d) == b and not datastream.closed:
                 d = datastream.read(b)
@@ -39,13 +44,20 @@ class FileStore(Adapter):
         assert not host, host
         return open(path, 'rb')
 
+    def delete(self):
+        protocol, host, path = parse_uri(self.context.value)
+        assert protocol == 'file', protocol
+        assert not host, host
+        log.debug('Unlinking "%s"' % path)
+        os.unlink(path)
+
 
 class Blackhole(Adapter):
     implements(IDataStore)
     context(IDataObject)
     name('null')
 
-    def save(self, datastream):
+    def save(self, datastream, encoding):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
         assert not host, host
