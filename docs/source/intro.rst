@@ -42,6 +42,16 @@ You can connect to the Stoxy via ssh:
 .. code-block:: sh
 
   $ ssh john@localhost -p 6022
+  john@oms:/# cd storage/
+  john@oms:/storage# mk storagecontainer name=mycdmicontainer
+  mycdmicontainer
+  john@oms:/storage# cat mycdmicontainer/
+    CDMI Object ID: 00FFFFFF0018DE73C99C88787DC7474E893BC313BB1C3CB2
+    Container name: mycdmicontainer
+    Metadata:
+    mtime:          2013-11-26T11:29:29.563157
+    ctime:          2013-11-26T11:29:29.564023
+
 
 or REST:
 
