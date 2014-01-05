@@ -2,10 +2,13 @@
 STOrage proXY (STOXY)
 =====================
 
-Stoxy is a web storage server talking `CDMI protocol`_. It's a continuation of a `CDMI-Proxy`_ project building
-on top of a `Twisted`_, `OMS`_, ZCA and ZODB.
+Stoxy is a web storage server exposing a common interface (`CDMI protocol`_) for accessing multiple data source backends.
+It's a continuation of a `CDMI-Proxy`_ project building on top of a `Twisted`_, `OMS`_, ZCA and ZODB.
 
-Stoxy supports CRUD operations for data objects and containers.
+Stoxy supports read-write operations for data objects (aka files) and containers (aka folders) and integrates with
+the following backend systems:
+
+Support for additional backend systems is on-going, for tutorial for adding new backends, see below.
 
 Source code
 -----------
@@ -26,6 +29,8 @@ Documentation
    cli_usage
    ops
    security
+   deployments
+   backend_tutorial
 
 Module documentation
 ====================
