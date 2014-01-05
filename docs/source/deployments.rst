@@ -1,6 +1,8 @@
-List of known Stoxy deployments
-===============================
+Deployment
+==========
 
+List of known Stoxy deployments
+-------------------------------
 
 * https://demo.stoxy.net - demo instance, reset and upgraded every day. Demo user: **stoxy:stoxy**
 * https://egi-cloud43.zam.kfa-juelich.de/stoxy - Forschungszentrum Jülich testbed
@@ -8,7 +10,7 @@ List of known Stoxy deployments
 
 
 Limiting listening ports to localhost
-=====================================
+-------------------------------------
 
 Add to stoxy.conf::
 
@@ -21,7 +23,7 @@ Add to stoxy.conf::
 
 
 Disabling PAM backend
-=====================
+---------------------
 
 Add to stoxy.conf::
 
@@ -29,3 +31,13 @@ Add to stoxy.conf::
     use_pam = no
 
 If PAM is not used for authentication, this will greatly improve the performance of operations.
+
+Resolving setuptools/distribute conflict
+----------------------------------------
+
+In some cases system packages are conflicting with buildout's requested version of setuptools. An easy fix is to
+use virtualenv::
+
+  $ virtualenv -p /usr/bin/python27 --no-site-packages stoxyenv
+  $ . ./stoxyenv/bin/activate
+  $ #proceed with initial deployments instructions

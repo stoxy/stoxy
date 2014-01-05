@@ -16,7 +16,8 @@ The rest of the concepts are introduced as part of the tutorial.
 
 Where data is stored
 --------------------
-Stoxy imposes a logical structure on the data, a kind of a virtual file path.
+Stoxy imposes a logical structure on the data, a kind of a virtual file path. The 'folders' of this filesystems, aka
+containers, are stored in Stoxy database (ZODB). Actual object content is stored in the configured backend.
 
 
 Implementation of the backend operations
