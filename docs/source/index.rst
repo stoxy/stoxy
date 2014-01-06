@@ -26,6 +26,7 @@ Documentation
 
    intro
    usage
+   upgrade
    cli_usage
    ops
    security
