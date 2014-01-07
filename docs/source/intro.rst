@@ -8,7 +8,7 @@ Stoxy comes with a buildout configuration file that defines all requires depende
 
 .. code-block:: sh
 
-  $ git clone https://github.com/stoxy/stoxy.git
+  $ git clone -b 0.1 https://github.com/stoxy/stoxy.git
   $ cd stoxy
   $ python bootstrap.py
   $ ./bin/buildout -N
