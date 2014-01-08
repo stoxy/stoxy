@@ -53,4 +53,4 @@ Verified on an AWS instance of Ubuntu 13.10::
     $ cd stoxy && python bootstrap.py && ./bin/buildout -N
     $ ./bin/omspasswd -a stoxy  # to add a user
     $ ./bin/omspasswd -g cdmiusers -a stoxy  # to add a user with cdmiusers group
-    $ ./bin/stoxy  # start a process
+    $ ./bin/stoxy  # start the STOXY process
