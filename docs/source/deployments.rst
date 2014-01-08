@@ -35,8 +35,8 @@ If PAM is not used for authentication, this will greatly improve the performance
 Resolving setuptools/distribute conflict
 ----------------------------------------
 
-In some cases system packages are conflicting with buildout's requested version of setuptools. An easy fix is to
-use virtualenv::
+In some cases system packages are conflicting with buildout's requested version
+of setuptools. An easy fix is to use virtualenv::
 
     $ virtualenv -p /usr/bin/python27 stoxyenv
     $ . ./stoxyenv/bin/activate
@@ -52,4 +52,5 @@ Verified on an AWS instance of Ubuntu 13.10::
     $ . stoxyenv/bin/activate
     $ cd stoxy && python bootstrap.py && ./bin/buildout -N
     $ ./bin/omspasswd -a stoxy  # to add a user
-    $ ./bin/stoxy  # start a process
+    $ ./bin/omspasswd -g cdmiusers -a stoxy  # to add a user with cdmiusers group
+    $ ./bin/stoxy  # start the STOXY process
