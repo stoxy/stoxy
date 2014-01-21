@@ -28,7 +28,6 @@ Documentation
    usage
    upgrade
    cli_usage
-   ops
    security
    deployments
    backend_tutorial
