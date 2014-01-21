@@ -49,7 +49,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Stoxy Server'
-copyright = u'2013, Stoxy developers'
+copyright = u'2013-2014, Stoxy developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

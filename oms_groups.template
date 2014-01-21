@@ -1,0 +1,2 @@
+admins:admin,security
+cdmiusers:rest,read,view,execute
