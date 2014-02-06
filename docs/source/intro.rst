@@ -13,6 +13,26 @@ Stoxy comes with a buildout configuration file that defines all requires depende
   $ python bootstrap.py
   $ ./bin/buildout -N
  
+Set groups
+----------
+
+Create an `oms_groups` file in the folder you'd like to run Stoxy. A template is provided in oms_group_template_.
+Optionally, set the location of a file in `stoxy.conf`.
+
+.. _oms_group_template: https://raw.github.com/stoxy/stoxy/master/oms_groups.template
+ 
+Admin accounts
+--------------
+
+Before starting we need at least an admin user account:
+
+.. code-block:: sh
+
+  $ bin/omspasswd -a john -g admins
+
+You can change the password later on with the same `bin/omspasswd` utility, see
+`bin/omspasswd --help` for additional info.
+
 User accounts
 -------------
 
@@ -20,7 +40,7 @@ Before starting we need at least an admin user account:
 
 .. code-block:: sh
 
-  $ bin/omspasswd -a john -g admins
+  $ bin/omspasswd -a john -g cdmiusers
 
 You can change the password later on with the same `bin/omspasswd` utility, see
 `bin/omspasswd --help` for additional info.
