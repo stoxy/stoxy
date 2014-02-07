@@ -28,14 +28,14 @@ from opennode.oms.model.traversal import parse_path
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
+from stoxy.server.model.capability import ISystemCapability
+from stoxy.server.model.capability import SystemCapability
 from stoxy.server.model.container import IStorageContainer
 from stoxy.server.model.container import IInStorageContainer
 from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
-from stoxy.server.model.capability import ISystemCapability
-from stoxy.server.model.capability import SystemCapability
 from stoxy.server.model.dataobject import IDataObject
 
 from stoxy.server.model.store import IDataStoreFactory
@@ -83,8 +83,9 @@ class DataStreamProducer(object):
         if self.datastream.tell() < self.begin:
             self.datastream.seek(self.begin)
 
-        data = self.datastream.read(min(self.MAX_CHUNK, max(0, self.end - self.datastream.tell()
-                                                            if self.end else self.MAX_CHUNK)))
+        data = self.datastream.read(min(self.MAX_CHUNK,
+                                        max(0, self.end - self.datastream.tell()
+                                            if self.end else self.MAX_CHUNK)))
         self.consumer.write(data)
         self.lastSent = data[-1:]
 
@@ -240,13 +241,13 @@ class CdmiView(HttpRestView):
 
         return data
 
-    def store_object(self, obj, datastream, encoding):
+    def store_object(self, obj, datastream, encoding, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        storemgr.save(datastream, encoding)
+        storemgr.save(datastream, encoding, **kwargs)
 
-    def load_object(self, obj):
+    def load_object(self, obj, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        return storemgr.load()
+        return storemgr.load(**kwargs)
 
     @db.transact
     def handle_success(self, r, request, obj, principal, update, dstream, encoding):

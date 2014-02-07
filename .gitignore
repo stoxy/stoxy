@@ -7,6 +7,7 @@ RELEASE-VERSION
 bin
 .installed.cfg
 .settings
+src
 develop-eggs
 eggs
 parts
