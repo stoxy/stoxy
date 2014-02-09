@@ -1,2 +1,4 @@
 /:allow:g:cdmiusers:x # comments at the end of line are also supported
+/:allow:g:role1:x # comments at the end of line are also supported
 /storage:allow:g:cdmiusers:v,x
+/storage:allow:g:role1:v,x,w
