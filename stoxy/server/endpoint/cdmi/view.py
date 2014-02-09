@@ -42,6 +42,7 @@ from stoxy.server.model.store import IDataStoreFactory
 from stoxy.server.model.form import CdmiObjectValidatorFactory
 from stoxy.server import common
 from stoxy.server.endpoint.cdmi import current_capabilities
+from stoxy.server.backend.swift import SwiftStore
 
 
 log = logging.getLogger(__name__)
@@ -109,19 +110,20 @@ class CdmiView(HttpRestView):
     def set_response_headers(cls, request):
         request.setHeader('X-CDMI-Specification-Version', common.CDMI_VERSION)
 
-    def render_object(self, obj):
-        return json.dumps(self.object_to_dict(obj), cls=JsonSetEncoder)
+    def render_object(self, obj, request, render_value):
+        """Render an object into JSON. If render_value is True, render load and render also the content""" 
+        return json.dumps(self.object_to_dict(obj, request, render_value=render_value), cls=JsonSetEncoder)
 
     def get_additional_data(self, obj, attrs=None):
         return {}
 
-    def object_to_dict(self, obj, attrs=None):
+    def object_to_dict(self, obj, request, attrs=None, render_value=True):
 
         def filter_attr(attr, attrs):
-            return not attrs or attr in attrs.keys()
+            return attrs is None or attr in attrs.keys()
 
         def get_data(obj, begin=0, end=None):
-            datastream = self.load_object(obj)
+            datastream = self.load_object(obj, request.getHeader('X-Auth-Token'))
 
             if datastream.tell() < begin:
                 datastream.seek(begin)
@@ -152,9 +154,9 @@ class CdmiView(HttpRestView):
                 yield ('children', lambda: [(child.name if IDataObject.providedBy(child)
                                              else child.__name__) for child in obj.listcontent()])
                 yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
-            elif IDataObject.providedBy(obj) and isComplete:
-                if attrs and 'value' in attrs:
-                    begin, end = attrs['value']
+            elif IDataObject.providedBy(obj) and isComplete and render_value:
+                if 'valuerange' in attrs:
+                    begin, end = map(int, attrs['valuerange'].split('-'))
                 else:
                     begin = 0
                     end = None
@@ -168,7 +170,7 @@ class CdmiView(HttpRestView):
         # filter for requested attributes
         filtered_generator = [(k, vg) for k, vg in object_data_generator(obj, attrs=attrs)
                               if filter_attr(k, attrs)]
-
+        log.debug('Requested attributes: %s' % filtered_generator)
         # evaluate generators and construct the final dict
         data = dict([(k, vg()) for k, vg in filtered_generator])
         data.update(self.get_additional_data(obj, attrs=attrs))
@@ -194,7 +196,7 @@ class CdmiView(HttpRestView):
             request.setHeader('Content-Type', self.object_type_map[self.context.type])
             log.debug('Received arguments: %s', request.args)
             attrs = dict(self.parse_args_to_filter_attrs(request.args))
-            return self.object_to_dict(self.context, attrs=attrs)
+            return self.object_to_dict(self.context, request, attrs=attrs)
         else:
             return self.handle_noncdmi_get(request)
 
@@ -241,13 +243,16 @@ class CdmiView(HttpRestView):
 
         return data
 
-    def store_object(self, obj, datastream, encoding, **kwargs):
+    def store_object(self, obj, datastream, encoding, credentials, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        storemgr.save(datastream, encoding, **kwargs)
+        # a bit of inside knowledge
+        if type(storemgr) is SwiftStore and credentials is None:
+            raise BadRequest('Swift backend requires credentials in x-auth-token headers')
+        storemgr.save(datastream, encoding, credentials, **kwargs)
 
-    def load_object(self, obj, **kwargs):
+    def load_object(self, obj, credentials, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        return storemgr.load(**kwargs)
+        return storemgr.load(credentials, **kwargs)
 
     @db.transact
     def handle_success(self, r, request, obj, principal, update, dstream, encoding):
@@ -256,7 +261,10 @@ class CdmiView(HttpRestView):
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            self.store_object(obj, dstream, encoding)
+            # XXX this is a hack and it doesn't feel the extraction should happen here. But cannot come up with 
+            # smarter ideas at the moment
+            credentials = request.getHeader('X-Auth-Token')
+            self.store_object(obj, dstream, encoding, credentials)
 
         self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
                            ('Creation' if not update else 'Update', obj.name, obj.__name__))
@@ -279,21 +287,22 @@ class CdmiView(HttpRestView):
             f.raiseException()
         except defer.CancelledError:
             return
+        except BadRequest:
+            request.setResponseCode(400)
         except Exception:
             log.debug('Error debugging info', exc_info=True)
-
-        request.setResponseCode(500)
+            request.setResponseCode(500)
         request.write(json.dumps({'errorMessage': str(f.value)}))
         request.finish()
 
-    def finish_response(self, r, request, obj, noncdmi=False):
+    def finish_response(self, r, request, obj, noncdmi=False, render_value=True):
         if request.finished:  # Should not be triggered at all
             log.error('Connection lost: cannot render resulting object. '
                       'Modifications were saved. %s', request)
             return
 
         if not noncdmi:
-            request.write(self.render_object(obj))
+            request.write(self.render_object(obj, request, render_value=render_value))
 
         request.finish()
 
@@ -352,7 +361,7 @@ class CdmiView(HttpRestView):
                                 data.get(u'valuetransferencoding', 'utf-8'))
         connection_lost = request.notifyFinish()
         connection_lost.addBoth(lambda r: d.cancel())
-        d.addCallback(self.finish_response, request, result_object, noncdmi)
+        d.addCallback(self.finish_response, request, result_object, noncdmi, render_value=False)
         d.addErrback(self.handle_error, request, result_object, principal, existing_object)
 
         return NOT_DONE_YET

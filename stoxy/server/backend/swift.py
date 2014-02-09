@@ -22,11 +22,14 @@ class SwiftStore(Adapter):
     context(IDataObject)
     name('swift')
 
-    def save(self, datastream, encoding):
+    def save(self, datastream, encoding, credentials):
+        log.debug('Saving Swift object %s' % self.context.value)
         protocol, host, path = parse_uri(self.context.value)
 
-    def load(self):
+    def load(self, credentials):
+        log.debug('Loading Swift object %s' % self.context.value)
         protocol, host, path = parse_uri(self.context.value)
 
-    def delete(self):
+    def delete(self, credentials):
+        log.debug('Deleting Swift object %s' % self.context.value)
         protocol, host, path = parse_uri(self.context.value)
