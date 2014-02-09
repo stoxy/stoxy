@@ -322,8 +322,11 @@ class CdmiView(HttpRestView):
             data = self._parse_and_validate_data(request)
             dstream = StringIO.StringIO(data.get('value', ''))
             data[u'value'] = None
-        else:
+        elif requested_type == 'application/cdmi-container':
             dstream = io.BytesIO()
+            data = self._parse_and_validate_data(request)
+        else:
+            raise BadRequest('Cannot handle PUT for the requeste object type %s' % requested_type)
 
         if existing_object:
             data[u'name'] = unicode(parse_path(request.path)[-1])
