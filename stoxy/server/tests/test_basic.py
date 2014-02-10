@@ -162,7 +162,14 @@ class TestBasic(unittest.TestCase):
         result_data = response.json()
         self.assertEqual('application/cdmi-object', result_data['objectType'])
         self.assertEqual('testobject', result_data['objectName'])
-        self.assertTrue(len(result_data['value']) > 0)
+
+        response = requests.get(self._endpoint + '/testcontainer/testobject',
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        result_data = response.json()
+        self.assertTrue('value' in result_data, result_data)
+        self.assertTrue(len(result_data['value']) > 0, result_data)
         self.assertEqual(base64.b64decode(content),
                          base64.b64decode(result_data['value']))
         self.assertEqual(content, result_data['value'])
@@ -220,7 +227,8 @@ class TestBasic(unittest.TestCase):
                                 auth=self._credentials,
                                 headers=noncdmi_headers)
 
-        self.assertEqual(len(response.text), 5)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(response.text), 5, response.text)
         self.assertEqual(response.text, content[10:15])
         self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
 
@@ -337,5 +345,5 @@ class TestBasic(unittest.TestCase):
         self.assertTrue('value' in data.keys(), 'value is not in data (%s)!' % data)
         self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
         self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
-        self.assertEqual('EgAAYXM=', data['value'], data['value'])
         self.assertEqual(content[1:6], base64.b64decode(data['value']))
+        self.assertEqual('EgAAYXM=', data['value'], 'Value in response did not match the requested range')

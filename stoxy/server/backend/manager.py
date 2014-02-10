@@ -4,6 +4,7 @@ Module for data managers tasked with storage of CDMI object data
 import base64
 import logging
 import os
+import StringIO
 
 from grokcore.component import implements, name, Adapter, context
 from zope.component import getAdapter
@@ -57,7 +58,7 @@ class Blackhole(Adapter):
     context(IDataObject)
     name('null')
 
-    def save(self, datastream, encoding,  credentials=None):
+    def save(self, datastream, encoding, credentials=None):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
         assert not host, host
@@ -66,6 +67,8 @@ class Blackhole(Adapter):
         protocol, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
         assert not host, host
+
+        return StringIO.StringIO('')
 
     def delete(self, credentials=None):
         protocol, host, path = parse_uri(self.context.value)

@@ -111,16 +111,16 @@ class CdmiView(HttpRestView):
         request.setHeader('X-CDMI-Specification-Version', common.CDMI_VERSION)
 
     def render_object(self, obj, request, render_value):
-        """Render an object into JSON. If render_value is True, render load and render also the content""" 
+        """Render an object into JSON. If render_value is True, render load and render also the content"""
         return json.dumps(self.object_to_dict(obj, request, render_value=render_value), cls=JsonSetEncoder)
 
     def get_additional_data(self, obj, attrs=None):
         return {}
 
-    def object_to_dict(self, obj, request, attrs=None, render_value=True):
+    def object_to_dict(self, obj, request, attrs={}, render_value=True):
 
         def filter_attr(attr, attrs):
-            return attrs is None or attr in attrs.keys()
+            return attrs is None or len(attrs) == 0 or attr in attrs.keys()
 
         def get_data(obj, begin=0, end=None):
             datastream = self.load_object(obj, request.getHeader('X-Auth-Token'))
@@ -145,7 +145,6 @@ class CdmiView(HttpRestView):
                                             and not ISystemCapability.providedBy(obj))
                                         else None))
             yield ('completionStatus', lambda: 'Complete')  # TODO: report errors / incomplete status
-            isComplete = True
 
             if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
                 yield ('metadata', lambda: dict(obj.metadata))
@@ -154,9 +153,9 @@ class CdmiView(HttpRestView):
                 yield ('children', lambda: [(child.name if IDataObject.providedBy(child)
                                              else child.__name__) for child in obj.listcontent()])
                 yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
-            elif IDataObject.providedBy(obj) and isComplete and render_value:
-                if 'valuerange' in attrs:
-                    begin, end = map(int, attrs['valuerange'].split('-'))
+            elif IDataObject.providedBy(obj) and render_value:
+                if 'value' in attrs:
+                    begin, end = (int(v) for v in attrs['value'])
                 else:
                     begin = 0
                     end = None
@@ -170,7 +169,7 @@ class CdmiView(HttpRestView):
         # filter for requested attributes
         filtered_generator = [(k, vg) for k, vg in object_data_generator(obj, attrs=attrs)
                               if filter_attr(k, attrs)]
-        log.debug('Requested attributes: %s' % filtered_generator)
+        log.debug('Requested attributes: %s; attrs: %s' % ([k for k, v in filtered_generator], attrs))
         # evaluate generators and construct the final dict
         data = dict([(k, vg()) for k, vg in filtered_generator])
         data.update(self.get_additional_data(obj, attrs=attrs))
@@ -184,21 +183,6 @@ class CdmiView(HttpRestView):
             return auth.getPrincipal(None)
         else:
             return interaction.participations[0].principal
-
-    @response_headers
-    def render_get(self, request):
-        if not request.interaction.checkPermission('view', self.context):
-            raise NotFound
-
-        cdmi = request.getHeader('X-CDMI-Specification-Version')
-
-        if cdmi or not IDataObject.providedBy(self.context):
-            request.setHeader('Content-Type', self.object_type_map[self.context.type])
-            log.debug('Received arguments: %s', request.args)
-            attrs = dict(self.parse_args_to_filter_attrs(request.args))
-            return self.object_to_dict(self.context, request, attrs=attrs)
-        else:
-            return self.handle_noncdmi_get(request)
 
     def parse_args_to_filter_attrs(self, args):
         for key, val in args.iteritems():
@@ -224,7 +208,8 @@ class CdmiView(HttpRestView):
             begin, end = map(int, byterange.split('-'))
             log.debug('Getting range %d:%d' % (begin, end))
 
-        datastream = self.load_object(self.context)
+        # XXX: It should not be the only option to get authentication credentials
+        datastream = self.load_object(self.context, request.getHeader('X-Auth-Token'))
         d = DataStreamProducer().beginSendingData(datastream, request, begin, end)
         d.addBoth(lambda r: log.debug('Finished sending data'))
 
@@ -248,6 +233,7 @@ class CdmiView(HttpRestView):
         # a bit of inside knowledge
         if type(storemgr) is SwiftStore and credentials is None:
             raise BadRequest('Swift backend requires credentials in x-auth-token headers')
+
         storemgr.save(datastream, encoding, credentials, **kwargs)
 
     def load_object(self, obj, credentials, **kwargs):
@@ -261,7 +247,7 @@ class CdmiView(HttpRestView):
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            # XXX this is a hack and it doesn't feel the extraction should happen here. But cannot come up with 
+            # XXX this is a hack and it doesn't feel the extraction should happen here. But cannot come up with
             # smarter ideas at the moment
             credentials = request.getHeader('X-Auth-Token')
             self.store_object(obj, dstream, encoding, credentials)
@@ -283,6 +269,10 @@ class CdmiView(HttpRestView):
                            ('Creation' if not update else 'Update',
                             obj.name, obj.__name__, type(f.value).__name__, f.value))
 
+        log.error('%s of %s (%s) via CDMI failed: %s: %s' %
+                  ('Creation' if not update else 'Update',
+                   obj.name, obj.__name__, type(f.value).__name__, f.value))
+
         try:
             f.raiseException()
         except defer.CancelledError:
@@ -292,6 +282,7 @@ class CdmiView(HttpRestView):
         except Exception:
             log.debug('Error debugging info', exc_info=True)
             request.setResponseCode(500)
+
         request.write(json.dumps({'errorMessage': str(f.value)}))
         request.finish()
 
@@ -305,6 +296,21 @@ class CdmiView(HttpRestView):
             request.write(self.render_object(obj, request, render_value=render_value))
 
         request.finish()
+
+    @response_headers
+    def render_get(self, request):
+        if not request.interaction.checkPermission('view', self.context):
+            raise NotFound
+
+        cdmi = request.getHeader('X-CDMI-Specification-Version')
+
+        if cdmi or not IDataObject.providedBy(self.context):
+            request.setHeader('Content-Type', self.object_type_map[self.context.type])
+            log.debug('Received arguments: %s', request.args)
+            attrs = dict(self.parse_args_to_filter_attrs(request.args))
+            return self.object_to_dict(self.context, request, attrs=attrs)
+        else:
+            return self.handle_noncdmi_get(request)
 
     @response_headers
     def render_put(self, request):
@@ -335,7 +341,7 @@ class CdmiView(HttpRestView):
             dstream = io.BytesIO()
             data = self._parse_and_validate_data(request)
         else:
-            raise BadRequest('Cannot handle PUT for the requeste object type %s' % requested_type)
+            raise BadRequest('Cannot handle PUT for the request object type %s' % requested_type)
 
         if existing_object:
             data[u'name'] = unicode(parse_path(request.path)[-1])

@@ -90,17 +90,16 @@ class TestSwift(unittest.TestCase):
         self.addToCleanup(self.cleanup_object, '/swift/')
         self.addToCleanup(self.cleanup_object, '/swift/testobject')
         c.create_container('/swift',
-                           metadata={
-                               'stoxy_backend': 'swift',
-                               'stoxy_backend_base': 'swift.example.com/v1.0/account/container/'
-                           })
+                           metadata={'stoxy_backend': 'swift',
+                                     'stoxy_backend_base': 'swift.example.com/v1.0/account/container/'})
 
         data = {'metadata': {'event name': 'SNIA SDC 2013',
                              'event location': 'Santa Clara, CA'},
                 'mimetype': 'text/plain'}
 
         object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
-                                             'Content-Type': libcdmi.common.CDMI_OBJECT})
+                                             'Content-Type': libcdmi.common.CDMI_OBJECT,
+                                             'X-Auth-Token': 'TEST'})
 
         with open(self._filename, 'rb') as input_file:
             try:
@@ -126,7 +125,14 @@ class TestSwift(unittest.TestCase):
         result_data = response.json()
         self.assertEqual('application/cdmi-object', result_data['objectType'])
         self.assertEqual('testobject', result_data['objectName'])
-        self.assertTrue(len(result_data['value']) > 0)
+
+        response = requests.get(self._endpoint + '/swift/testobject',
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        result_data = response.json()
+        self.assertTrue('value' in result_data, 'No value field in response: %s' % result_data.keys())
+        self.assertTrue(len(result_data['value']) > 0, 'Result value length is zero!')
         self.assertEqual(base64.b64decode(content),
                          base64.b64decode(result_data['value']))
         self.assertEqual(content, result_data['value'])

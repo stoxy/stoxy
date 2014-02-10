@@ -31,5 +31,5 @@ def handle_container_delete(model, event):
 def handle_dataobject_delete(model, event):
     log.debug('Deleting object: "%s"' % model)
     storemgr = getAdapter(model, store.IDataStoreFactory).create()
-    # TODO: passing credentials for the deletion operation is not clear atm if it's initiated via ssh 
+    # TODO: passing credentials for the deletion operation is not clear atm if it's initiated via ssh
     storemgr.delete(None)
