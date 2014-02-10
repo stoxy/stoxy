@@ -147,7 +147,7 @@ class TestCLITool(unittest.TestCase):
 
         response = self.run_cli_with_args(raw_args)
 
-        self.assertEqual(None, response)
+        self.assertIsNone(response)
 
         raw_args = ['get',
                     self._endpoint + '/testcontainertodelete/testobjecttodelete',
