@@ -84,19 +84,27 @@ class DataStoreFactory(Adapter):
         # get backend of the parent container
         parent_md = object_.__parent__.metadata
         backend = parent_md.get('stoxy_backend', 'file')
+
         backend_base = parent_md.get('stoxy_backend_base',
                                      get_config().getstring('store', 'file_base_path', '/tmp'))
-        path = '%s/%s' % (backend_base, object_.name)
-        uri = '%s://%s' % (backend, path)
+
+        backend_base_protocol = parent_md.get('stoxy_backend_base_protocol')
+
+        if backend_base_protocol:
+            path = None
+            uri = '%s/%s' % (backend_base, object_.name)
+        else:
+            path = '%s/%s' % (backend_base, object_.name)
+            uri = '%s://%s' % (backend, path)
+
         log.debug('Constructed internal uri %s' % uri)
-        return (uri, backend, None, path)
+        return (uri, backend)
 
     def create(self):
         if self.context.value:
-            protocol, host, path = parse_uri(self.context.value)
+            protocol, host, _ = parse_uri(self.context.value)
         else:
-            # XXX we actually discard all but the host part
-            uri, protocol, host, path = self.make_uri(self.context)
+            uri, protocol = self.make_uri(self.context)
             self.context.value = uri
 
         return getAdapter(self.context, IDataStore, protocol)

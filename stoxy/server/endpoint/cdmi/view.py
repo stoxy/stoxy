@@ -1,7 +1,7 @@
 import base64
+import functools
 import json
 import logging
-import functools
 import io
 import StringIO
 
@@ -28,6 +28,8 @@ from opennode.oms.model.traversal import parse_path
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
+from stoxy.server import common
+from stoxy.server.endpoint.cdmi import current_capabilities
 from stoxy.server.model.capability import ISystemCapability
 from stoxy.server.model.capability import SystemCapability
 from stoxy.server.model.container import IStorageContainer
@@ -37,12 +39,8 @@ from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
-
-from stoxy.server.model.store import IDataStoreFactory
 from stoxy.server.model.form import CdmiObjectValidatorFactory
-from stoxy.server import common
-from stoxy.server.endpoint.cdmi import current_capabilities
-from stoxy.server.backend.swift import SwiftStore
+from stoxy.server.model.store import IDataStoreFactory
 
 
 log = logging.getLogger(__name__)
@@ -154,6 +152,7 @@ class CdmiView(HttpRestView):
                                              else child.__name__) for child in obj.listcontent()])
                 yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
             elif IDataObject.providedBy(obj) and render_value:
+                # NOTE: 'value' attribute name is mandated by the specification
                 if 'value' in attrs:
                     begin, end = (int(v) for v in attrs['value'])
                 else:
@@ -230,10 +229,6 @@ class CdmiView(HttpRestView):
 
     def store_object(self, obj, datastream, encoding, credentials, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        # a bit of inside knowledge
-        if type(storemgr) is SwiftStore and credentials is None:
-            raise BadRequest('Swift backend requires credentials in x-auth-token headers')
-
         storemgr.save(datastream, encoding, credentials, **kwargs)
 
     def load_object(self, obj, credentials, **kwargs):
@@ -247,8 +242,8 @@ class CdmiView(HttpRestView):
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            # XXX this is a hack and it doesn't feel the extraction should happen here. But cannot come up with
-            # smarter ideas at the moment
+            # XXX this is a hack and it doesn't feel the extraction should
+            # happen here. But cannot come up with smarter ideas at the moment
             credentials = request.getHeader('X-Auth-Token')
             self.store_object(obj, dstream, encoding, credentials)
 
@@ -328,11 +323,11 @@ class CdmiView(HttpRestView):
 
         if requested_type not in self.object_constructor_map.keys():
             noncdmi = True
-            data[u'mimetype'] = requested_type
             requested_type = 'application/cdmi-object'
             dstream = request.content
-            data[u'value'] = None
             data[u'content_length'] = content_length
+            data[u'mimetype'] = requested_type
+            data[u'value'] = None
         elif requested_type == 'application/cdmi-object':
             data = self._parse_and_validate_data(request)
             dstream = StringIO.StringIO(data.get('value', ''))
@@ -378,6 +373,10 @@ class CdmiView(HttpRestView):
         existing_object = self.context.__parent__[name]
         if existing_object:
             log.debug('Deleting %s', self.context)
+            # XXX: Alternative authentication methods!
+            credentials = request.getHeader('X-Auth-Token')
+            storemgr = getAdapter(self.context, IDataStoreFactory).create()
+            storemgr.delete(credentials)
             del self.context.__parent__[name]
             handle(self.context, ModelDeletedEvent(self.context.__parent__))
         else:
@@ -419,5 +418,4 @@ class StoxyViewFactory(Adapter):
             return
 
         request.unresolved_path = path[-1]
-
         return queryAdapter(self.context, IHttpRestView)

@@ -28,6 +28,8 @@ log = logging.getLogger(__name__)
 
 class TestSwift(unittest.TestCase):
     _endpoint = config.DEFAULT_ENDPOINT
+    _swift_endpoint = 'https://egi-cloud.zam.kfa-juelich.de:8776/v1/df37f5b1ebc94604964c2854b9c0551f'
+    _swift_token_filename = '/tmp/swift_token'
     _mock_up_marker = object()
     _credentials = config.CREDENTIALS
     _base_headers = libcdmi.common.HEADER_CDMI_VERSION
@@ -37,7 +39,11 @@ class TestSwift(unittest.TestCase):
         fh, self._filename = tempfile.mkstemp(prefix='libcdmi-test-')
         with open(self._filename, 'w') as f:
             f.write('\xff\x12\0\0asdfgkasdlkasdlaskdlas\x91\x01\x03\0\0\0\0')
+
         os.close(fh)  # allow opening by the library
+
+        with open(self._swift_token_filename, 'r') as f:
+            self._swift_token = f.read()
 
     def tearDown(self):
         os.unlink(self._filename)
@@ -69,11 +75,8 @@ class TestSwift(unittest.TestCase):
 
         self.cleanup_object('/swift')
         container_create = c.create_container('/swift',
-                                              metadata={
-                                                  'stoxy_backend': 'swift',
-                                                  'stoxy_backend_base':
-                                                  'swift.example.com/v1.0/account/container/'
-                                              })
+                                              metadata={'stoxy_backend': 'swift',
+                                                        'stoxy_backend_base_protocol': self._swift_endpoint})
         container_get = c.get('/swift/', accept=libcdmi.common.CDMI_CONTAINER)
 
         self.assertEqual(dict, type(container_create))
@@ -91,7 +94,7 @@ class TestSwift(unittest.TestCase):
         self.addToCleanup(self.cleanup_object, '/swift/testobject')
         c.create_container('/swift',
                            metadata={'stoxy_backend': 'swift',
-                                     'stoxy_backend_base': 'swift.example.com/v1.0/account/container/'})
+                                     'stoxy_backend_base_protocol': self._swift_endpoint})
 
         data = {'metadata': {'event name': 'SNIA SDC 2013',
                              'event location': 'Santa Clara, CA'},
@@ -99,7 +102,7 @@ class TestSwift(unittest.TestCase):
 
         object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
                                              'Content-Type': libcdmi.common.CDMI_OBJECT,
-                                             'X-Auth-Token': 'TEST'})
+                                             'X-Auth-Token': self._swift_token})
 
         with open(self._filename, 'rb') as input_file:
             try:
