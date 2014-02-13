@@ -36,4 +36,9 @@ def server_is_up():
     return _server_is_up
 
 
+def libcdmi_available():
+    if type(libcdmi) == MagicMock:
+        return False
+    return True
+
 NotThere = '<NotThere>'

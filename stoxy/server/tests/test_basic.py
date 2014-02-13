@@ -13,6 +13,7 @@ import config
 from opennode.oms.config import get_config
 
 from stoxy.server.tests.common import server_is_up
+from stoxy.server.tests.common import libcdmi_available
 from stoxy.server.tests.common import NotThere
 
 
@@ -69,6 +70,7 @@ class TestBasic(unittest.TestCase):
         final_headers.update(headers)
         return final_headers
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_update_container(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -87,6 +89,7 @@ class TestBasic(unittest.TestCase):
                              'Expected: %s, but received: %s in %s' %
                              (value, container_get.get(key, NotThere), key))
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_and_get_container(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -125,6 +128,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual('application/cdmi-container', result_data['objectType'])
         self.assertEqual('testcontainer', result_data['objectName'])
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_object_detailed(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -174,6 +178,7 @@ class TestBasic(unittest.TestCase):
                          base64.b64decode(result_data['value']))
         self.assertEqual(content, result_data['value'])
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_object_non_cdmi_detailed(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -200,6 +205,7 @@ class TestBasic(unittest.TestCase):
         result_data = response.text  # Response body is not required
         self.assertTrue(len(result_data) == 0)
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_get_object_non_cdmi_detailed(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -242,6 +248,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual(response.text, content[1:6])
         self.assertEqual(response.headers['content-type'], object_headers['Content-Type'])
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_delete_object(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -281,6 +288,7 @@ class TestBasic(unittest.TestCase):
                         'File "%s" exists after deletion of model object!' % stoxy_filepath)
 
     @unittest.skipUnless(config.FULL_TEST, 'Known to be broken: TODO: implement custom arguments parsing')
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_get_specific_fields_using_get_cdmi_params(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -314,6 +322,7 @@ class TestBasic(unittest.TestCase):
         self.assertEqual('EgAAYXM=', data['value'], data['value'])
         self.assertEqual(content[1:6], base64.b64decode(data['value']))
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_get_specific_fields_using_get_http_params(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)

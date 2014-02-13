@@ -11,6 +11,7 @@ from mock import MagicMock
 import config
 
 from stoxy.server.tests.common import server_is_up
+from stoxy.server.tests.common import libcdmi_available
 from stoxy.server.tests.common import NotThere
 
 
@@ -65,6 +66,7 @@ class TestSwift(unittest.TestCase):
         final_headers.update(headers)
         return final_headers
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_create_and_get_container(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
@@ -85,6 +87,7 @@ class TestSwift(unittest.TestCase):
                              'Expected: %s, but received: %s in %s' %
                              (value, container_get.get(key, NotThere), key))
 
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
     @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
     def test_swift_create_object(self):
         c = libcdmi.open(self._endpoint, credentials=self._credentials)
