@@ -15,7 +15,8 @@ setup(
                   'console_scripts': ['stoxy = opennode.oms.daemon:run']},
     install_requires=[
         "setuptools",  # Redundant but removes a warning
-        "opennode.oms.core"
+        "opennode.oms.core",
+        "python-swiftclient"
         ],
 
 )

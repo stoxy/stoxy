@@ -103,6 +103,7 @@ class TestCLITool(unittest.TestCase):
                     '-f', self._filename]
 
         response = self.run_cli_with_args(raw_args)
+        self.assertIsNotNone(response, 'CLI tool returned empty response to "get" request')
 
         self.assertEqual('testobject', response.get('objectName'))
         self.assertEqual(orig_objectid, response.get('objectID'))
@@ -147,7 +148,7 @@ class TestCLITool(unittest.TestCase):
 
         response = self.run_cli_with_args(raw_args)
 
-        self.assertEqual(None, response)
+        self.assertIsNone(response)
 
         raw_args = ['get',
                     self._endpoint + '/testcontainertodelete/testobjecttodelete',

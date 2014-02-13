@@ -1,7 +1,7 @@
 import base64
+import functools
 import json
 import logging
-import functools
 import io
 import StringIO
 
@@ -28,20 +28,19 @@ from opennode.oms.model.traversal import parse_path
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
+from stoxy.server import common
+from stoxy.server.endpoint.cdmi import current_capabilities
+from stoxy.server.model.capability import ISystemCapability
+from stoxy.server.model.capability import SystemCapability
 from stoxy.server.model.container import IStorageContainer
 from stoxy.server.model.container import IInStorageContainer
 from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
 from stoxy.server.model.dataobject import DataObject
-from stoxy.server.model.capability import ISystemCapability
-from stoxy.server.model.capability import SystemCapability
 from stoxy.server.model.dataobject import IDataObject
-
-from stoxy.server.model.store import IDataStoreFactory
 from stoxy.server.model.form import CdmiObjectValidatorFactory
-from stoxy.server import common
-from stoxy.server.endpoint.cdmi import current_capabilities
+from stoxy.server.model.store import IDataStoreFactory
 
 
 log = logging.getLogger(__name__)
@@ -83,8 +82,9 @@ class DataStreamProducer(object):
         if self.datastream.tell() < self.begin:
             self.datastream.seek(self.begin)
 
-        data = self.datastream.read(min(self.MAX_CHUNK, max(0, self.end - self.datastream.tell()
-                                                            if self.end else self.MAX_CHUNK)))
+        data = self.datastream.read(min(self.MAX_CHUNK,
+                                        max(0, self.end - self.datastream.tell()
+                                            if self.end else self.MAX_CHUNK)))
         self.consumer.write(data)
         self.lastSent = data[-1:]
 
@@ -108,19 +108,20 @@ class CdmiView(HttpRestView):
     def set_response_headers(cls, request):
         request.setHeader('X-CDMI-Specification-Version', common.CDMI_VERSION)
 
-    def render_object(self, obj):
-        return json.dumps(self.object_to_dict(obj), cls=JsonSetEncoder)
+    def render_object(self, obj, request, render_value):
+        """Render an object into JSON. If render_value is True, render load and render also the content"""
+        return json.dumps(self.object_to_dict(obj, request, render_value=render_value), cls=JsonSetEncoder)
 
     def get_additional_data(self, obj, attrs=None):
         return {}
 
-    def object_to_dict(self, obj, attrs=None):
+    def object_to_dict(self, obj, request, attrs={}, render_value=True):
 
         def filter_attr(attr, attrs):
-            return not attrs or attr in attrs.keys()
+            return attrs is None or len(attrs) == 0 or attr in attrs.keys()
 
         def get_data(obj, begin=0, end=None):
-            datastream = self.load_object(obj)
+            datastream = self.load_object(obj, request.getHeader('X-Auth-Token'))
 
             if datastream.tell() < begin:
                 datastream.seek(begin)
@@ -142,7 +143,6 @@ class CdmiView(HttpRestView):
                                             and not ISystemCapability.providedBy(obj))
                                         else None))
             yield ('completionStatus', lambda: 'Complete')  # TODO: report errors / incomplete status
-            isComplete = True
 
             if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
                 yield ('metadata', lambda: dict(obj.metadata))
@@ -151,9 +151,10 @@ class CdmiView(HttpRestView):
                 yield ('children', lambda: [(child.name if IDataObject.providedBy(child)
                                              else child.__name__) for child in obj.listcontent()])
                 yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
-            elif IDataObject.providedBy(obj) and isComplete:
-                if attrs and 'value' in attrs:
-                    begin, end = attrs['value']
+            elif IDataObject.providedBy(obj) and render_value:
+                # NOTE: 'value' attribute name is mandated by the specification
+                if 'value' in attrs:
+                    begin, end = (int(v) for v in attrs['value'])
                 else:
                     begin = 0
                     end = None
@@ -167,7 +168,7 @@ class CdmiView(HttpRestView):
         # filter for requested attributes
         filtered_generator = [(k, vg) for k, vg in object_data_generator(obj, attrs=attrs)
                               if filter_attr(k, attrs)]
-
+        log.debug('Requested attributes: %s; attrs: %s' % ([k for k, v in filtered_generator], attrs))
         # evaluate generators and construct the final dict
         data = dict([(k, vg()) for k, vg in filtered_generator])
         data.update(self.get_additional_data(obj, attrs=attrs))
@@ -181,21 +182,6 @@ class CdmiView(HttpRestView):
             return auth.getPrincipal(None)
         else:
             return interaction.participations[0].principal
-
-    @response_headers
-    def render_get(self, request):
-        if not request.interaction.checkPermission('view', self.context):
-            raise NotFound
-
-        cdmi = request.getHeader('X-CDMI-Specification-Version')
-
-        if cdmi or not IDataObject.providedBy(self.context):
-            request.setHeader('Content-Type', self.object_type_map[self.context.type])
-            log.debug('Received arguments: %s', request.args)
-            attrs = dict(self.parse_args_to_filter_attrs(request.args))
-            return self.object_to_dict(self.context, attrs=attrs)
-        else:
-            return self.handle_noncdmi_get(request)
 
     def parse_args_to_filter_attrs(self, args):
         for key, val in args.iteritems():
@@ -221,7 +207,8 @@ class CdmiView(HttpRestView):
             begin, end = map(int, byterange.split('-'))
             log.debug('Getting range %d:%d' % (begin, end))
 
-        datastream = self.load_object(self.context)
+        # XXX: It should not be the only option to get authentication credentials
+        datastream = self.load_object(self.context, request.getHeader('X-Auth-Token'))
         d = DataStreamProducer().beginSendingData(datastream, request, begin, end)
         d.addBoth(lambda r: log.debug('Finished sending data'))
 
@@ -240,13 +227,13 @@ class CdmiView(HttpRestView):
 
         return data
 
-    def store_object(self, obj, datastream, encoding):
+    def store_object(self, obj, datastream, encoding, credentials, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        storemgr.save(datastream, encoding)
+        storemgr.save(datastream, encoding, credentials, **kwargs)
 
-    def load_object(self, obj):
+    def load_object(self, obj, credentials, **kwargs):
         storemgr = getAdapter(obj, IDataStoreFactory).create()
-        return storemgr.load()
+        return storemgr.load(credentials, **kwargs)
 
     @db.transact
     def handle_success(self, r, request, obj, principal, update, dstream, encoding):
@@ -255,7 +242,10 @@ class CdmiView(HttpRestView):
             self.context.add(obj)
 
         if IDataObject.providedBy(obj):
-            self.store_object(obj, dstream, encoding)
+            # XXX this is a hack and it doesn't feel the extraction should
+            # happen here. But cannot come up with smarter ideas at the moment
+            credentials = request.getHeader('X-Auth-Token')
+            self.store_object(obj, dstream, encoding, credentials)
 
         self.add_log_event(principal, '%s of %s (%s) via CDMI was successful' %
                            ('Creation' if not update else 'Update', obj.name, obj.__name__))
@@ -274,27 +264,48 @@ class CdmiView(HttpRestView):
                            ('Creation' if not update else 'Update',
                             obj.name, obj.__name__, type(f.value).__name__, f.value))
 
+        log.error('%s of %s (%s) via CDMI failed: %s: %s' %
+                  ('Creation' if not update else 'Update',
+                   obj.name, obj.__name__, type(f.value).__name__, f.value))
+
         try:
             f.raiseException()
         except defer.CancelledError:
             return
+        except BadRequest:
+            request.setResponseCode(400)
         except Exception:
             log.debug('Error debugging info', exc_info=True)
+            request.setResponseCode(500)
 
-        request.setResponseCode(500)
         request.write(json.dumps({'errorMessage': str(f.value)}))
         request.finish()
 
-    def finish_response(self, r, request, obj, noncdmi=False):
+    def finish_response(self, r, request, obj, noncdmi=False, render_value=True):
         if request.finished:  # Should not be triggered at all
             log.error('Connection lost: cannot render resulting object. '
                       'Modifications were saved. %s', request)
             return
 
         if not noncdmi:
-            request.write(self.render_object(obj))
+            request.write(self.render_object(obj, request, render_value=render_value))
 
         request.finish()
+
+    @response_headers
+    def render_get(self, request):
+        if not request.interaction.checkPermission('view', self.context):
+            raise NotFound
+
+        cdmi = request.getHeader('X-CDMI-Specification-Version')
+
+        if cdmi or not IDataObject.providedBy(self.context):
+            request.setHeader('Content-Type', self.object_type_map[self.context.type])
+            log.debug('Received arguments: %s', request.args)
+            attrs = dict(self.parse_args_to_filter_attrs(request.args))
+            return self.object_to_dict(self.context, request, attrs=attrs)
+        else:
+            return self.handle_noncdmi_get(request)
 
     @response_headers
     def render_put(self, request):
@@ -312,17 +323,20 @@ class CdmiView(HttpRestView):
 
         if requested_type not in self.object_constructor_map.keys():
             noncdmi = True
-            data[u'mimetype'] = requested_type
             requested_type = 'application/cdmi-object'
             dstream = request.content
-            data[u'value'] = None
             data[u'content_length'] = content_length
+            data[u'mimetype'] = requested_type
+            data[u'value'] = None
         elif requested_type == 'application/cdmi-object':
             data = self._parse_and_validate_data(request)
             dstream = StringIO.StringIO(data.get('value', ''))
             data[u'value'] = None
-        else:
+        elif requested_type == 'application/cdmi-container':
             dstream = io.BytesIO()
+            data = self._parse_and_validate_data(request)
+        else:
+            raise BadRequest('Cannot handle PUT for the request object type %s' % requested_type)
 
         if existing_object:
             data[u'name'] = unicode(parse_path(request.path)[-1])
@@ -348,7 +362,7 @@ class CdmiView(HttpRestView):
                                 data.get(u'valuetransferencoding', 'utf-8'))
         connection_lost = request.notifyFinish()
         connection_lost.addBoth(lambda r: d.cancel())
-        d.addCallback(self.finish_response, request, result_object, noncdmi)
+        d.addCallback(self.finish_response, request, result_object, noncdmi, render_value=False)
         d.addErrback(self.handle_error, request, result_object, principal, existing_object)
 
         return NOT_DONE_YET
@@ -359,6 +373,10 @@ class CdmiView(HttpRestView):
         existing_object = self.context.__parent__[name]
         if existing_object:
             log.debug('Deleting %s', self.context)
+            # XXX: Alternative authentication methods!
+            credentials = request.getHeader('X-Auth-Token')
+            storemgr = getAdapter(self.context, IDataStoreFactory).create()
+            storemgr.delete(credentials)
             del self.context.__parent__[name]
             handle(self.context, ModelDeletedEvent(self.context.__parent__))
         else:
@@ -400,5 +418,4 @@ class StoxyViewFactory(Adapter):
             return
 
         request.unresolved_path = path[-1]
-
         return queryAdapter(self.context, IHttpRestView)
