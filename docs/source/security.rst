@@ -31,6 +31,9 @@ Edit ``stoxy.conf`` and add the following sections:
    # E.g. default version on OS X 10.8 is older, a newer can be installed via homebrew:
    # 'brew install openssl' and would be located at /usr/local/Cellar/openssl/1.0.1e/bin/openssl .
    openssl_cmd = /usr/local/Cellar/openssl/1.0.1e/bin/openssl
+   
+   # Trusted keystone instance URI. Will be used for propagation via www-authentication headers
+   keystone_uri = https://keystone.example.com:port/
 
 Example Keystone CAs could be taken from `Keystone's repository <https://github.com/openstack/keystone/tree/master/examples/pki>`_.
 
