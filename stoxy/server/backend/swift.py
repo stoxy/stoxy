@@ -29,7 +29,11 @@ class SwiftStore(Adapter):
         log.debug('Saving Swift object %s' % self.context.value)
         protocol, host, path = parse_uri(self.context.value)
         path, objname = path.split('/', 1)
-        client.put_object(self.context.value, credentials, path, objname, contents=datastream)
+        datalen = len(datastream.read())
+        datastream.seek(0)
+        client.put_object(self.context.value, credentials, path, objname, contents=datastream,
+                          content_length=datalen)
+        log.debug('Swift object "%s" saved' % self.context.value)
 
     def load(self, credentials):
         if credentials is None:

@@ -84,16 +84,14 @@ class DataStoreFactory(Adapter):
         # get backend of the parent container
         parent_md = object_.__parent__.metadata
         backend = parent_md.get('stoxy_backend', 'file')
-
-        backend_base = parent_md.get('stoxy_backend_base',
-                                     get_config().getstring('store', 'file_base_path', '/tmp'))
-
         backend_base_protocol = parent_md.get('stoxy_backend_base_protocol')
 
-        if backend_base_protocol:
+        if backend_base_protocol is not None:
             path = None
-            uri = '%s/%s' % (backend_base, object_.name)
+            uri = '%s/%s' % (backend_base_protocol, object_.name)
         else:
+            backend_base = parent_md.get('stoxy_backend_base',
+                                     get_config().getstring('store', 'file_base_path', '/tmp'))
             path = '%s/%s' % (backend_base, object_.name)
             uri = '%s://%s' % (backend, path)
 

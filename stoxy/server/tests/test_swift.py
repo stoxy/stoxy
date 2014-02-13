@@ -10,8 +10,6 @@ from mock import MagicMock
 
 import config
 
-from opennode.oms.config import get_config
-
 from stoxy.server.tests.common import server_is_up
 from stoxy.server.tests.common import NotThere
 
@@ -28,7 +26,7 @@ log = logging.getLogger(__name__)
 
 class TestSwift(unittest.TestCase):
     _endpoint = config.DEFAULT_ENDPOINT
-    _swift_endpoint = 'https://egi-cloud.zam.kfa-juelich.de:8776/v1/df37f5b1ebc94604964c2854b9c0551f'
+    _swift_endpoint = 'https://swift.zam.kfa-juelich.de:8888/v1/AUTH_df37f5b1ebc94604964c2854b9c0551f'
     _swift_token_filename = '/tmp/swift_token'
     _mock_up_marker = object()
     _credentials = config.CREDENTIALS
