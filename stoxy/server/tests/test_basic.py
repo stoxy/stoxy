@@ -270,7 +270,7 @@ class TestBasic(unittest.TestCase):
 
         # XXX: when used from the unit test, get_config() gives only the OMS config, so need to specify
         # the base path in OMS config too
-        stoxy_filepath = '%s/%s' % (get_config().getstring('store', 'file_base_path', '/storage'),
+        stoxy_filepath = '%s/%s' % (get_config().getstring('store', 'file_base_path', '/tmp'),
                                     'testobject')
 
         self.assertTrue(os.path.exists(stoxy_filepath),
