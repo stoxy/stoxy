@@ -91,7 +91,7 @@ class DataStoreFactory(Adapter):
             uri = '%s/%s' % (backend_base_protocol, object_.name)
         else:
             backend_base = parent_md.get('stoxy_backend_base',
-                                     get_config().getstring('store', 'file_base_path', '/tmp'))
+                                         get_config().getstring('store', 'file_base_path', '/tmp'))
             path = '%s/%s' % (backend_base, object_.name)
             uri = '%s://%s' % (backend, path)
 
