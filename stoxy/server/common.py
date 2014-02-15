@@ -111,7 +111,7 @@ def crc16(s):
     return crcValue
 
 
-URI_RE = re.compile(r'^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?')
+URI_RE = re.compile(r'^(([^:/?#\+]+)\+([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?')
 
 
 def parse_uri(uri):
@@ -119,4 +119,4 @@ def parse_uri(uri):
     match = URI_RE.match(uri)
     if not match:
         return
-    return match.group(2, 4, 5)
+    return match.group(2, 3, 4, 6)

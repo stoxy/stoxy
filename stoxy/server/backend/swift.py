@@ -27,12 +27,12 @@ class SwiftStore(Adapter):
             raise BadRequest('Swift backend requires credentials in x-auth-token headers')
 
         log.debug('Saving Swift object %s' % self.context.value)
-        protocol, host, path = parse_uri(self.context.value)
-        path, objname = path.split('/', 1)
-        datalen = len(datastream.read())
-        datastream.seek(0)
-        client.put_object(self.context.value, credentials, path, objname, contents=datastream,
-                          content_length=datalen)
+        protocol, schema, host, path = parse_uri(self.context.value)
+        uri = "%s:%s%s" % (schema, host, path)
+        #base_path, objname = path.split('/', 1)
+        #datalen = len(datastream.read())
+        #datastream.seek(0)
+        client.put_object(uri, credentials, contents=datastream)
         log.debug('Swift object "%s" saved' % self.context.value)
 
     def load(self, credentials):
@@ -40,9 +40,10 @@ class SwiftStore(Adapter):
             raise BadRequest('Swift backend requires credentials in x-auth-token headers')
 
         log.debug('Loading Swift object %s' % self.context.value)
-        protocol, host, path = parse_uri(self.context.value)
-        path, objname = path.split('/', 1)
-        response, contents = client.get_object(self.context.value, credentials, path, objname)
+        protocol, schema, host, path = parse_uri(self.context.value)
+        uri = "%s:%s%s" % (schema, host, path)
+        base_path, objname = path.split('/', 1)
+        response, contents = client.get_object(uri, credentials, base_path, objname)
         return StringIO.StringIO(contents)
 
     def delete(self, credentials):
@@ -50,5 +51,6 @@ class SwiftStore(Adapter):
             raise BadRequest('Swift backend requires credentials in x-auth-token headers')
 
         log.debug('Deleting Swift object %s' % self.context.value)
-        protocol, host, path = parse_uri(self.context.value)
-        client.delete_object(self.context.value, credentials, path)
+        protocol, schema, host, path = parse_uri(self.context.value)
+        uri = "%s:%s%s" % (schema, host, path)
+        client.delete_object(uri, credentials, path)

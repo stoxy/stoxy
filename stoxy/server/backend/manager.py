@@ -88,7 +88,7 @@ class DataStoreFactory(Adapter):
 
         if backend_base_protocol is not None:
             path = None
-            uri = '%s/%s' % (backend_base_protocol, object_.name)
+            uri = '%s+%s/%s' % (backend, backend_base_protocol, object_.name)
         else:
             backend_base = parent_md.get('stoxy_backend_base',
                                          get_config().getstring('store', 'file_base_path', '/tmp'))
@@ -100,7 +100,7 @@ class DataStoreFactory(Adapter):
 
     def create(self):
         if self.context.value:
-            protocol, host, _ = parse_uri(self.context.value)
+            protocol, schema, host, path = parse_uri(self.context.value)
         else:
             uri, protocol = self.make_uri(self.context)
             self.context.value = uri
