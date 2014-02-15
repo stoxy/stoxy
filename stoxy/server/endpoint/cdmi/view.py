@@ -24,6 +24,8 @@ from opennode.oms.endpoint.httprest.root import BadRequest
 from opennode.oms.endpoint.httprest.root import NotFound
 from opennode.oms.log import UserLogger
 from opennode.oms.model.model.events import ModelDeletedEvent
+from opennode.oms.model.model.byname import ByNameContainer
+from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.traversal import parse_path
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
@@ -323,11 +325,12 @@ class CdmiView(HttpRestView):
 
         if requested_type not in self.object_constructor_map.keys():
             noncdmi = True
-            requested_type = 'application/cdmi-object'
             dstream = request.content
             data[u'content_length'] = content_length
             data[u'mimetype'] = requested_type
             data[u'value'] = None
+            # set to a 'correct' one - the only supported via CDMI
+            requested_type = 'application/cdmi-object'
         elif requested_type == 'application/cdmi-object':
             data = self._parse_and_validate_data(request)
             dstream = StringIO.StringIO(data.get('value', ''))
@@ -373,10 +376,19 @@ class CdmiView(HttpRestView):
         existing_object = self.context.__parent__[name]
         if existing_object:
             log.debug('Deleting %s', self.context)
-            # XXX: Alternative authentication methods!
-            credentials = request.getHeader('X-Auth-Token')
-            storemgr = getAdapter(self.context, IDataStoreFactory).create()
-            storemgr.delete(credentials)
+            # are we deleting a container?
+            if IStorageContainer.providedBy(self.context):
+                # check children
+                children = [child for child in self.context.listcontent() if
+                                       IDataObject.providedBy(child) or
+                                       IStorageContainer.providedBy(child)]
+                if len(children) > 0:
+                    raise BadRequest('Attempt to delete a non-empty container')
+            else:
+                # XXX: Alternative authentication methods!
+                credentials = request.getHeader('X-Auth-Token')
+                storemgr = getAdapter(self.context, IDataStoreFactory).create()
+                storemgr.delete(credentials)
             del self.context.__parent__[name]
             handle(self.context, ModelDeletedEvent(self.context.__parent__))
         else:
