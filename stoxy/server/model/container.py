@@ -84,22 +84,22 @@ class ObjectIdContainer(ReadonlyContainer):
 
     @property
     def _items(self):
-        machines = db.get_root()['oms_root']['storage']
+        storage = db.get_root()['oms_root']['storage']
 
-        computes = {}
+        objects = {}
 
         def collect(container):
             seen = set()
             for item in container.listcontent():
                 if IStorageContainer.providedBy(item) or model.dataobject.IDataObject.providedBy(item):
-                    computes[item.oid] = Symlink(item.oid, item)
+                    objects[item.oid] = Symlink(item.oid, item)
 
                 if IStorageContainer.providedBy(item) and item.oid not in seen:
                     seen.add(item.oid)
                     collect(item)
 
-        collect(machines)
-        return computes
+        collect(storage)
+        return objects
 
     @property
     def oid(self):
