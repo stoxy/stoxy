@@ -29,9 +29,8 @@ class SwiftStore(Adapter):
         log.debug('Saving Swift object %s' % self.context.value)
         protocol, schema, host, path = parse_uri(self.context.value)
         uri = "%s:%s%s" % (schema, host, path)
-        #base_path, objname = path.split('/', 1)
-        #datalen = len(datastream.read())
-        #datastream.seek(0)
+        # TODO breaks streaming. Need to re-enable once functionality is validated.
+        datastream = datastream.read()
         client.put_object(uri, credentials, contents=datastream)
         log.debug('Swift object "%s" saved' % self.context.value)
 
@@ -41,7 +40,7 @@ class SwiftStore(Adapter):
 
         log.debug('Loading Swift object %s' % self.context.value)
         protocol, schema, host, path = parse_uri(self.context.value)
-        uri = "%s:%s%s" % (schema, host, path)
+        uri = "%s:%s" % (schema, host)
         base_path, objname = path.split('/', 1)
         response, contents = client.get_object(uri, credentials, base_path, objname)
         return StringIO.StringIO(contents)

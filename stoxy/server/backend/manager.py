@@ -25,9 +25,9 @@ class FileStore(Adapter):
     name('file')
 
     def save(self, datastream, encoding, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
-        assert not host, host
+        assert path, path
         b = 6 * 1024
         log.debug('Writing file: "%s"' % path)
         with open(path, 'wb') as f:
@@ -40,15 +40,15 @@ class FileStore(Adapter):
                 f.write(d)
 
     def load(self, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
-        assert not host, host
+        assert path, path
         return open(path, 'rb')
 
     def delete(self, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'file', protocol
-        assert not host, host
+        assert path, path
         log.debug('Unlinking "%s"' % path)
         os.unlink(path)
 
@@ -59,21 +59,21 @@ class Blackhole(Adapter):
     name('null')
 
     def save(self, datastream, encoding, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
-        assert not host, host
+        assert path, path
 
     def load(self, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
-        assert not host, host
+        assert path, path
 
         return StringIO.StringIO('')
 
     def delete(self, credentials=None):
-        protocol, host, path = parse_uri(self.context.value)
+        protocol, schema, host, path = parse_uri(self.context.value)
         assert protocol == 'null', protocol
-        assert not host, host
+        assert path, path
 
 
 class DataStoreFactory(Adapter):
@@ -93,7 +93,7 @@ class DataStoreFactory(Adapter):
             backend_base = parent_md.get('stoxy_backend_base',
                                          get_config().getstring('store', 'file_base_path', '/tmp'))
             path = '%s/%s' % (backend_base, object_.name)
-            uri = '%s://%s' % (backend, path)
+            uri = 'file+%s://%s' % (backend, path)
 
         log.debug('Constructed internal uri %s' % uri)
         return (uri, backend)
