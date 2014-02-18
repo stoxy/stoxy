@@ -9,10 +9,14 @@ from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector
 from opennode.oms.model.model.base import IDisplayName
+from opennode.oms.model.model.base import ReadonlyContainer
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.symlink import Symlink
+from opennode.oms.zodb import db
 
 from stoxy.server import common
+from stoxy.server import model
 
 
 class IInStorageContainer(Interface):
@@ -62,6 +66,53 @@ class StorageContainer(Container):
         return StorageContainer
 
 
+class ObjectIdContainer(ReadonlyContainer):
+    implements(IInStorageContainer, IDisplayName)
+    __contains__ = IInStorageContainer
+    __name__ = 'cdmi_objectid'
+
+    @property
+    def name(self):
+        return 'cdmi_objectid'
+
+    def display_name(self):
+        return self.name
+
+    @property
+    def nicknames(self):
+        return [self.name]
+
+    @property
+    def _items(self):
+        storage = db.get_root()['oms_root']['storage']
+
+        objects = {}
+
+        def collect(container):
+            seen = set()
+            for item in container.listcontent():
+                if IStorageContainer.providedBy(item) or model.dataobject.IDataObject.providedBy(item):
+                    objects[item.oid] = Symlink(item.oid, item)
+
+                if IStorageContainer.providedBy(item) and item.oid not in seen:
+                    seen.add(item.oid)
+                    collect(item)
+
+        collect(storage)
+        return objects
+
+    @property
+    def oid(self):
+        return self.__name__
+
+    def __str__(self):
+        return '<ObjectIDContainer>'
+
+    @property
+    def type(self):
+        return StorageContainer
+
+
 class RootStorageContainer(Container):
     implements(IStorageContainer, IDisplayName, IRootContainer)
     __contains__ = IInStorageContainer
@@ -94,6 +145,11 @@ class RootStorageContainer(Container):
 class DataObjectsRootInjector(ContainerInjector):
     context(OmsRoot)
     __class__ = RootStorageContainer
+
+
+class ObjectIDContainerInjector(ContainerInjector):
+    context(RootStorageContainer)
+    __class__ = ObjectIdContainer
 
 
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(RootStorageContainer, ))

@@ -39,6 +39,7 @@ from stoxy.server.model.container import IInStorageContainer
 from stoxy.server.model.container import IRootContainer
 from stoxy.server.model.container import RootStorageContainer
 from stoxy.server.model.container import StorageContainer
+from stoxy.server.model.container import ObjectIdContainer
 from stoxy.server.model.dataobject import DataObject
 from stoxy.server.model.dataobject import IDataObject
 from stoxy.server.model.form import CdmiObjectValidatorFactory
@@ -149,7 +150,11 @@ class CdmiView(HttpRestView):
             if IStorageContainer.providedBy(obj) or IDataObject.providedBy(obj):
                 yield ('metadata', lambda: dict(obj.metadata))
 
-            if IStorageContainer.providedBy(obj):
+            if isinstance(obj, ObjectIdContainer):
+                yield ('children', lambda: [(child.oid if IInStorageContainer.providedBy(child)
+                                             else child.__name__) for child in obj.listcontent()])
+                yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))
+            elif IStorageContainer.providedBy(obj):
                 yield ('children', lambda: [(child.name if IDataObject.providedBy(child)
                                              else child.__name__) for child in obj.listcontent()])
                 yield ('childrenrange', lambda: '0-%d' % len(obj.listcontent()))

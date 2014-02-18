@@ -356,3 +356,60 @@ class TestBasic(unittest.TestCase):
         self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
         self.assertEqual(content[1:6], base64.b64decode(data['value']))
         self.assertEqual('EgAAYXM=', data['value'], 'Value in response did not match the requested range')
+
+    @unittest.skipUnless(libcdmi_available(), 'libcdmi is not in the path')
+    @unittest.skipUnless(server_is_up(), 'Requires a running Stoxy server')
+    def test_cdmi_objectid(self):
+        c = libcdmi.open(self._endpoint, credentials=self._credentials)
+        self.addToCleanup(self.cleanup_object, '/testcontainer/')
+        self.addToCleanup(self.cleanup_object, '/testcontainer/testobject')
+        c.create_container('/testcontainer/')
+
+        data = {'metadata': {},
+                'mimetype': 'text/plain'}
+
+        object_headers = self._make_headers({'Accept': libcdmi.common.CDMI_OBJECT,
+                                             'Content-Type': libcdmi.common.CDMI_OBJECT})
+
+        with open(self._filename, 'rb') as input_file:
+            try:
+                content = input_file.read()
+                unicode(content, 'utf-8')
+                data['valuetransferencoding'] = 'utf-8'
+            except UnicodeDecodeError:
+                input_file.seek(0)
+                content = base64.b64encode(input_file.read())
+                data['valuetransferencoding'] = 'base64'
+
+        data.update({'value': content})
+
+        response = requests.put(self._endpoint + '/testcontainer/testobject',
+                                json.dumps(data),
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(response.headers['X-CDMI-Specification-Version'], '1.0.1')
+        self.assertEqual(response.headers['Content-Type'], 'application/cdmi-object')
+
+        result_data = response.json()
+        self.assertEqual('application/cdmi-object', result_data['objectType'])
+        self.assertEqual('testobject', result_data['objectName'])
+
+        self.assertTrue(len(response.text) > 0, 'Response was empty!')
+        data = response.json()
+
+        self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
+
+        response = requests.get(self._endpoint + ('/cdmi_objectid/%s/' % data['objectID']),
+                                auth=self._credentials,
+                                headers=object_headers)
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertTrue(len(response.text) > 0, 'Response was empty!')
+        data = response.json()
+        self.assertEqual(9, len(data), 'There were <> 9 keys in the response data: %s' % response.json())
+        self.assertTrue('value' in data.keys(), 'value is not in data (%s)!' % data)
+        self.assertTrue('objectID' in data.keys(), 'objectID is not in data (%s)!' % data)
+        self.assertTrue('parentURI' in data.keys(), 'parentURI is not in data (%s)!' % data)
+        self.assertEqual(base64.b64decode(content), base64.b64decode(data['value']), content)
