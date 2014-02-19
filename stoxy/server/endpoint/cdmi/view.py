@@ -111,6 +111,12 @@ class CdmiView(HttpRestView):
     def set_response_headers(cls, request):
         request.setHeader('X-CDMI-Specification-Version', common.CDMI_VERSION)
 
+    def render_OPTIONS(self, request):
+        # XXX: This overrides all the headers instead of adding just a single new one
+        request.setHeader('Access-Control-Allow-Headers',
+                          'Origin, Content-Type, Cache-Control, X-Requested-With, Authorization, X-CDMI-Specification-Version')
+        return super(CdmiView, self).render_OPTIONS(request)
+
     def render_object(self, obj, request, render_value):
         """Render an object into JSON. If render_value is True, render load and render also the content"""
         return json.dumps(self.object_to_dict(obj, request, render_value=render_value), cls=JsonSetEncoder)
