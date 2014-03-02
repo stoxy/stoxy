@@ -385,8 +385,8 @@ class CdmiView(HttpRestView):
             if IStorageContainer.providedBy(self.context):
                 # check children
                 children = [child for child in self.context.listcontent() if
-                                       IDataObject.providedBy(child) or
-                                       IStorageContainer.providedBy(child)]
+                            IDataObject.providedBy(child) or
+                            IStorageContainer.providedBy(child)]
                 if len(children) > 0:
                     raise BadRequest('Attempt to delete a non-empty container')
             else:

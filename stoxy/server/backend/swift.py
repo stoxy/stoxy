@@ -29,8 +29,6 @@ class SwiftStore(Adapter):
         log.debug('Saving Swift object %s' % self.context.value)
         protocol, schema, host, path = parse_uri(self.context.value)
         uri = "%s:%s%s" % (schema, host, path)
-        # TODO breaks streaming. Need to re-enable once functionality is validated.
-        datastream = datastream.read()
         client.put_object(uri, credentials, contents=datastream)
         log.debug('Swift object "%s" saved' % self.context.value)
 

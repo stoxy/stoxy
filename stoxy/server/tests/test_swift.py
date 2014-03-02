@@ -5,6 +5,7 @@ import os
 import requests
 import tempfile
 import unittest
+import time
 
 from mock import MagicMock
 
@@ -130,6 +131,7 @@ class TestSwift(unittest.TestCase):
         self.assertEqual('application/cdmi-object', result_data['objectType'])
         self.assertEqual('testobject', result_data['objectName'])
 
+        time.sleep(3)  # saving is async, wait a bit
         response = requests.get(self._endpoint + '/swift/testobject',
                                 auth=self._credentials,
                                 headers=object_headers)
