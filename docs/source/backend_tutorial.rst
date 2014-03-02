@@ -23,39 +23,32 @@ containers, are stored in Stoxy database (ZODB). Actual object content is stored
 Implementation of the backend operations
 ----------------------------------------
 
-An example implementation of the simple file backend follows. Will walk through the non-trivial aspects below.::
+An example implementation of the simple file backend follows. The self.context variable represents a
+a data object stored inside Stoxy DB.::
 
-    class FileStore(Adapter):
-        implements(IDataStore)
-        context(IDataObject)
-        name('file')
-
-        def save(self, datastream, encoding):
-            protocol, host, path = parse_uri(self.context.value)
-            assert protocol == 'file', protocol
-            assert not host, host
-            b = 6 * 1024
-            log.debug('Writing file: "%s"' % path)
-            with open(path, 'wb') as f:
-                d = datastream.read(b)
-                if encoding == 'base64':
-                    d = base64.b64decode(d)
-                f.write(d)
-                while len(d) == b and not datastream.closed:
-                    d = datastream.read(b)
-                    f.write(d)
-
-        def load(self):
-            protocol, host, path = parse_uri(self.context.value)
-            assert protocol == 'file', protocol
-            assert not host, host
-            return open(path, 'rb')
-
-        def delete(self):
-            protocol, host, path = parse_uri(self.context.value)
-            assert protocol == 'file', protocol
-            assert not host, host
-            log.debug('Unlinking "%s"' % path)
-            os.unlink(path)
+   class FileStore(Adapter):
+       implements(IDataStore)
+       context(IDataObject)
+       name('file')
+   
+       def save(self, datastream, encoding, credentials=None):
+           protocol, schema, host, path = parse_uri(self.context.value)
+           b = 6 * 1024
+           with open(path, 'wb') as f:
+               d = datastream.read(b)
+               if encoding == 'base64':
+                   d = base64.b64decode(d)
+               f.write(d)
+               while len(d) == b and not datastream.closed:
+                   d = datastream.read(b)
+                   f.write(d)
+   
+       def load(self, credentials=None):
+           protocol, schema, host, path = parse_uri(self.context.value)
+           return open(path, 'rb')
+   
+       def delete(self, credentials=None):
+           protocol, schema, host, path = parse_uri(self.context.value)
+           os.unlink(path)
 
 
