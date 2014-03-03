@@ -17,3 +17,12 @@ Stoxy can serve as a CDMI interface to a remote OpenStack Swift service. The top
   
 **NB!** Usage of the ``swift`` backend assumes that OpenStack authentication token is passed in the
 *X-Auth-Token* header of the request.
+
+Example of usage
+----------------
+
+An example of creating a Swift-backed container and executing basic data object operations is shown in the
+swift_tests_.
+
+
+.. _swift_tests: https://github.com/stoxy/stoxy/blob/master/stoxy/server/tests/test_swift.py#L93
